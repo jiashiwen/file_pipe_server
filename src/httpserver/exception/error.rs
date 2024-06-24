@@ -75,12 +75,7 @@ impl Display for AppError {
     }
 }
 
-/// 实现 IntoResponse
 impl IntoResponse for AppError {
-    // type Body = Full<Bytes>;
-    // type BodyError = Infallible;
-
-    // fn into_response(self) -> axum::http::Response<Self::Body> {
     fn into_response(self) -> axum::response::Response {
         let code = (&self).code();
         let msg = match self.message {

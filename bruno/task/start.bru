@@ -1,0 +1,18 @@
+meta {
+  name: start
+  type: http
+  seq: 4
+}
+
+post {
+  url: http://127.0.0.1:3000/api/v1/task/start
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    task_id:"123456",
+    loop_size: 10
+  }
+}

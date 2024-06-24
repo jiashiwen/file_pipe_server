@@ -4,7 +4,9 @@ mod commons;
 mod configure;
 mod httpserver;
 mod logger;
+mod modules;
 mod resources;
+mod tasks;
 
 fn main() {
     init_log();

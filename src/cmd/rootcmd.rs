@@ -5,6 +5,9 @@ use crate::configure::{get_config, get_config_file_path, get_current_config_yml,
 
 use crate::httpserver;
 use crate::resources::init_resources;
+use crate::tasks::{
+    init_tasks_status_server, GLOBAL_STOP_MARK, GLOBAL_TASK_JOINSET, GLOBAL_TASK_RUNTIME,
+};
 use clap::{Arg, ArgAction, ArgMatches};
 use fork::{daemon, Fork};
 use lazy_static::lazy_static;
@@ -51,16 +54,16 @@ pub fn run_app() {
     cmd_match(&matches);
 }
 
-pub fn run_from(args: Vec<String>) {
-    match clap::Command::try_get_matches_from(CLIAPP.to_owned(), args.clone()) {
-        Ok(matches) => {
-            cmd_match(&matches);
-        }
-        Err(err) => {
-            err.print().expect("Error writing Error");
-        }
-    };
-}
+// pub fn run_from(args: Vec<String>) {
+//     match clap::Command::try_get_matches_from(CLIAPP.to_owned(), args.clone()) {
+//         Ok(matches) => {
+//             cmd_match(&matches);
+//         }
+//         Err(err) => {
+//             err.print().expect("Error writing Error");
+//         }
+//     };
+// }
 
 // 获取全部子命令，用于构建commandcompleter
 // pub fn all_subcommand(app: &clap::Command, beginlevel: usize, input: &mut Vec<SubCmd>) {
@@ -147,11 +150,37 @@ fn cmd_match(matches: &ArgMatches) {
         println!("{}", banner);
         println!("current pid is:{}", std::process::id());
 
+        //启动公共 tokio runtime
+        GLOBAL_TASK_RUNTIME.block_on(async {
+            log::info!("global runtime start!");
+            log::info!(
+                "global task joinset is empty:{}",
+                GLOBAL_TASK_JOINSET.read().await.is_empty()
+            );
+        });
+
         // 初始化外部资源
         let rt = Runtime::new().unwrap();
         rt.block_on(async { init_resources().await.unwrap() });
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        rt.spawn(async move { init_tasks_status_server().await });
+
+        // let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+        // let async_http_server = async {
+        //     let config = get_config().unwrap();
+        //     let bind = config.http.bind;
+        //     let port = config.http.port;
+
+        //     let mut http_server = httpserver::HttpServer::default().await;
+        //     let ip = IpAddr::from_str(&bind).unwrap();
+        //     let addr = net::SocketAddr::from((ip, port));
+
+        //     http_server.listener = TcpListener::bind(addr).await.unwrap();
+
+        //     let http_handler = http_server.run().await;
+        //     let _http = tokio::join!(http_handler);
+        // };
+
         let async_http_server = async {
             let config = get_config().unwrap();
             let bind = config.http.bind;
@@ -179,16 +208,16 @@ fn cmd_match(matches: &ArgMatches) {
             let mut signals = SignalsInfo::<WithOrigin>::new(&sigs).unwrap();
             for info in &mut signals {
                 // Will print info about signal + where it comes from.
-                eprintln!("Received a signal {:?}", info);
+                log::info!("Received a signal {:?}", info);
+                GLOBAL_STOP_MARK.store(true, std::sync::atomic::Ordering::SeqCst);
                 match info.signal {
                     SIGTERM => {
                         println!("kill !");
                         exit(1);
                     }
                     term_sig => {
-                        eprintln!("Terminating");
+                        eprintln!("Terminating......");
                         // do some before exit
-
                         exit(0)
                     }
                 }

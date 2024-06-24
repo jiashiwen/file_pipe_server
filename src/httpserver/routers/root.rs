@@ -1,28 +1,24 @@
-use crate::httpserver::handlers::{current_config, rbatis_t_insert, redis_put, root};
+use crate::httpserver::handlers::{
+    current_config, rbatis_t_insert, redis_put, root, task_all, task_all_living, task_create,
+    task_remove, task_start, task_status, task_stop, task_update,
+};
 
-use axum::body::Body;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
-use axum::routing::{get, get_service, post, MethodRouter};
+use axum::routing::{get, post};
 use axum::{BoxError, Router};
-// use hyper::Body;
 
 use std::time::Duration;
 use tower::ServiceBuilder;
-use tower_http::services::ServeDir;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 
 pub fn router_root() -> Router {
     let tracer = TraceLayer::new_for_http();
-
     let middleware_stack = ServiceBuilder::new()
         .layer(tracer)
         .layer(CompressionLayer::new())
         .layer(HandleErrorLayer::new(handle_timeout_error))
         .layer(tower::timeout::TimeoutLayer::new(Duration::from_secs(2)))
-        // .layer(RequireAuthorizationLayer::custom(MyAuth {
-        //     _ty: PhantomData,
-        // }))
         .into_inner();
 
     // let static_files_service: MethodRouter<Body> = get_service(
@@ -40,13 +36,24 @@ pub fn router_root() -> Router {
         .route("/health", get(root))
         .route("/health", post(root));
 
+    let task_router = Router::new()
+        .route("/create", post(task_create))
+        .route("/update", post(task_update))
+        .route("/remove", post(task_remove))
+        .route("/start", post(task_start))
+        .route("/stop", post(task_stop))
+        .route("/status", post(task_status))
+        .route("/all", post(task_all))
+        .route("/all_living", post(task_all_living))
+        .layer(middleware_stack.clone());
+
     let api = Router::new()
         .route("/v1/currentconfig", post(current_config))
         .route("/v1/redis/put", post(redis_put))
         .route("/v1/mysql/insert", post(rbatis_t_insert))
-        .layer(middleware_stack);
+        .layer(middleware_stack.clone())
+        .nest("/v1/task", task_router);
 
-    // return root.fallback(static_files_service).nest("/api", api);
     return root.nest("/api", api);
 }
 
