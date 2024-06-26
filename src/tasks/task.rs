@@ -3,6 +3,7 @@ use crate::{
     commons::{
         byte_size_str_to_usize, byte_size_usize_to_str, struct_to_yaml_string, LastModifyFilter,
     },
+    resources::{CF_TASK, GLOBAL_ROCKSDB},
     s3::OSSDescription,
     tasks::LogInfo,
 };
@@ -84,6 +85,45 @@ pub enum Task {
 }
 
 impl Task {
+    pub fn update_task_id_rand(&mut self) -> i64 {
+        let task_id = task_id_generator();
+        match self {
+            Task::Transfer(transfer) => {
+                transfer.task_id = task_id.to_string();
+            }
+            Task::Compare(compare) => {
+                compare.task_id = task_id.to_string();
+            }
+            Task::TruncateBucket(truncate) => {
+                truncate.task_id = task_id.to_string();
+            }
+        }
+        println!("{:?}", task_id);
+        task_id
+    }
+    // ToDo
+    // 验证任务冲突；验证任务正确性
+    pub fn create(&self) -> Result<()> {
+        let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
+            Some(cf) => cf,
+            None => return Err(anyhow!("cf is not exist")),
+        };
+        let encoded: Vec<u8> = bincode::serialize(self)?;
+        match self {
+            Task::Transfer(transfer) => {
+                GLOBAL_ROCKSDB.put_cf(&cf, transfer.task_id.as_bytes(), encoded)?;
+            }
+            Task::Compare(compare) => {
+                GLOBAL_ROCKSDB.put_cf(&cf, compare.task_id.as_bytes(), encoded)?;
+            }
+            Task::TruncateBucket(truncate) => {
+                GLOBAL_ROCKSDB.put_cf(&cf, truncate.task_id.as_bytes(), encoded)?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn execute(&self) {
         let now = Instant::now();
         match self {

@@ -63,7 +63,6 @@ impl TasksStatusSaver {
     pub async fn snapshot_to_cf(&self) {
         log::info!("Task status saver run!");
         while !GLOBAL_STOP_MARK.load(std::sync::atomic::Ordering::Relaxed) {
-            println!("task status server runing");
             // for kv in self.living_tasks_map.iter() {
             for kv in GLOBAL_LIVING_TASK_MAP.iter() {
                 // 获取最小offset的FilePosition

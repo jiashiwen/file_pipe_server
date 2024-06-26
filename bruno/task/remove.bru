@@ -6,6 +6,12 @@ meta {
 
 post {
   url: http://127.0.0.1:3000/api/v1/task/remove
-  body: none
+  body: json
   auth: none
+}
+
+body:json {
+  {
+    "task_ids":[ "7211681857648332801"]
+  }
 }

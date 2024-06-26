@@ -1,0 +1,17 @@
+meta {
+  name: show
+  type: http
+  seq: 12
+}
+
+post {
+  url: http://127.0.0.1:3000/api/v1/task/show
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "task_id":"2343432"
+  }
+}
