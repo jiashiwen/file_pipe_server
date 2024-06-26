@@ -1,11 +1,10 @@
+use crate::tasks::CheckPoint;
 use anyhow::anyhow;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use rocksdb::{DBWithThreadMode, MultiThreaded, Options};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use crate::modules::CheckPoint;
 
 pub const CF_TASK_CHECKPOINTS: &'static str = "cf_task_checkpoints";
 

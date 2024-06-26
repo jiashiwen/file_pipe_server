@@ -1,9 +1,10 @@
 use crate::{
-    checkpoint::FileDescription,
     commons::{
         fill_file_with_zero, gen_file_part_plan, size_distributed, FilePart, LastModifyFilter,
-        RegexFilter, DOWNLOAD_TMP_FILE_SUBFFIX,
+        RegexFilter,
     },
+    tasks::FileDescription,
+    tasks::DOWNLOAD_TMP_FILE_SUBFFIX,
 };
 use anyhow::{anyhow, Result};
 use aws_sdk_s3::operation::{
@@ -42,7 +43,6 @@ pub struct ObjectRange {
     pub end: usize,
 }
 
-//Todo 尝试修改为Arc::<Client>
 #[derive(Debug, Clone)]
 pub struct OssClient {
     pub client: Client,
@@ -223,7 +223,6 @@ impl OssClient {
             local_file,
             bucket,
             key,
-            // Arc::clone(&executing_transfers),
             executing_transfers.clone(),
             multi_part_chunk_size,
             multi_part_chunk_per_batch,
@@ -234,7 +233,6 @@ impl OssClient {
 
     pub async fn download_object_by_range(
         &self,
-        // s_client: Arc<Client>,
         s_bucket: &str,
         s_key: &str,
         file_path: &str,

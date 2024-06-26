@@ -123,7 +123,7 @@ pub fn get_task_checkpoint(checkpoint_file: &str) -> Result<CheckPoint> {
 
 #[cfg(test)]
 mod test {
-    use crate::modules::get_task_checkpoint;
+    use crate::tasks::modules::get_task_checkpoint;
 
     //cargo test checkpoint::checkpoint::test::test_get_task_checkpoint -- --nocapture
     #[test]

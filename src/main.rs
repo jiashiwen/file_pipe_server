@@ -4,8 +4,8 @@ mod commons;
 mod configure;
 mod httpserver;
 mod logger;
-mod modules;
 mod resources;
+mod s3;
 mod tasks;
 
 fn main() {

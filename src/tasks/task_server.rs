@@ -8,7 +8,8 @@ use tokio::{
     task::{yield_now, JoinSet},
 };
 
-use crate::{modules::FilePosition, resources::get_checkpoint};
+use crate::resources::get_checkpoint;
+use crate::tasks::FilePosition;
 
 pub static GLOBAL_TASK_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
     let rocksdb = match init_task_runtime() {

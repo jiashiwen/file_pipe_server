@@ -1,7 +1,7 @@
 use super::HandlerResult;
 use crate::{
     httpserver::module::Response,
-    tasks::{task_id_generator, Tasks, GLOBAL_TASK_RUNTIME},
+    tasks::{task_id_generator, TestGlobalJoinsetTask, GLOBAL_TASK_RUNTIME},
 };
 use axum::Json;
 use serde_json::{json, Value};
@@ -18,7 +18,7 @@ pub async fn task_remove() -> HandlerResult<Value> {
     Ok(Json(Response::ok(json!({"remove":"ok"}))))
 }
 
-pub async fn task_start(Json(mut payload): Json<Tasks>) -> HandlerResult<Value> {
+pub async fn task_start(Json(mut payload): Json<TestGlobalJoinsetTask>) -> HandlerResult<Value> {
     payload.task_id = task_id_generator().to_string();
     GLOBAL_TASK_RUNTIME.spawn(async move {
         payload.run(10).await;
