@@ -1,6 +1,6 @@
 use super::{
     gen_file_path, task_actions::TransferTaskActions, IncrementAssistant, TransferStage,
-    TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
+    TransferTaskAttributes, GLOBAL_LIVING_TASK_MAP, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
     TRANSFER_ERROR_RECORD_PREFIX,
 };
 use crate::{
@@ -10,9 +10,9 @@ use crate::{
     },
     s3::{multipart_transfer_obj_paralle_by_range, OSSDescription, OssClient},
     tasks::{
-        get_task_checkpoint, FileDescription, FilePosition, ListedRecord, Opt, RecordDescription,
+        get_task_checkpoint, FileDescription, FilePosition, ListedRecord, LogInfo, Opt,
+        RecordDescription, TaskDefaultParameters, GLOBAL_TASK_STOP_MARK_MAP,
     },
-    tasks::{LogInfo, TaskDefaultParameters},
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -595,11 +595,11 @@ impl TransferTaskActions for TransferOss2Oss {
             }
 
             let _ = fs::remove_file(&modified.path);
-            checkpoint.executed_file_position = FilePosition {
+            checkpoint.executing_file_position = FilePosition {
                 offset: modified.size.try_into().unwrap(),
                 line_num: modified.total_lines,
             };
-            checkpoint.executed_file = modified.clone();
+            checkpoint.executing_file = modified.clone();
             checkpoint.task_begin_timestamp = i128::from(now.as_secs());
 
             let _ = checkpoint.save_to(&checkpoint_path);
@@ -906,12 +906,8 @@ impl TransferOss2OssRecordsExecutor {
     async fn record_description_handler(
         &self,
         executing_transfers: Arc<RwLock<usize>>,
-        // source_oss: &OssClient,
-        // target_oss: &OssClient,
         source_oss: &Arc<OssClient>,
         target_oss: &Arc<OssClient>,
-        // source_oss: &OssClient,
-        // target_oss: &OssClient,
         record: &RecordDescription,
     ) -> Result<()> {
         // 目标object存在则不推送

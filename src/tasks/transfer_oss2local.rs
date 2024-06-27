@@ -521,11 +521,11 @@ impl TransferTaskActions for TransferOss2Local {
             // let _ = fs::remove_file(&checkpoint.current_stock_object_list_file);
             let _ = fs::remove_file(&modified.path);
 
-            checkpoint.executed_file_position = FilePosition {
+            checkpoint.executing_file_position = FilePosition {
                 offset: modified.size.try_into().unwrap(),
                 line_num: modified.total_lines,
             };
-            checkpoint.executed_file = modified.clone();
+            checkpoint.executing_file = modified.clone();
             // checkpoint.current_stock_object_list_file = new_object_list_desc.path.clone();
             let _ = checkpoint.save_to(&checkpoint_path);
 

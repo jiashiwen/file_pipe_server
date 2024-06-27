@@ -93,6 +93,7 @@ pub struct Config {
     pub tikv: TiKVConfig,
     #[serde(default = "Config::http_default")]
     pub http: HttpConfig,
+    pub meta_dir: String,
     pub datasource_mysql: DatasourceMySql,
 }
 
@@ -102,6 +103,7 @@ impl Config {
             tikv: TiKVConfig::default(),
             http: HttpConfig::default(),
             datasource_mysql: DatasourceMySql::default(),
+            meta_dir: "meta_dir".to_string(),
         }
     }
 

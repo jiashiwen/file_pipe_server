@@ -355,7 +355,7 @@ impl CompareTask {
                 };
                 match checkpoint.seeked_execute_file() {
                     Ok(f) => {
-                        source_list_file_position = checkpoint.executed_file_position.clone();
+                        source_list_file_position = checkpoint.executing_file_position.clone();
                         source_list_file = Some(f);
                     }
                     Err(e) => {
@@ -365,7 +365,7 @@ impl CompareTask {
                     }
                 }
 
-                compare_source_list = checkpoint.executed_file.clone();
+                compare_source_list = checkpoint.executing_file.clone();
             } else {
                 // 清理 meta 目录
                 let _ = fs::remove_dir_all(self.attributes.meta_dir.as_str());
@@ -401,18 +401,18 @@ impl CompareTask {
         let task_id = self.task_id.clone();
         rt.block_on(async {
             // 启动checkpoint记录线程
-            let stock_status_saver = TaskStatusSaver {
-                check_point_path: check_point_file.clone(),
-                executed_file: compare_source_list.clone(),
-                stop_mark: Arc::clone(&snapshot_stop_mark),
-                list_file_positon_map: Arc::clone(&offset_map),
-                file_for_notify: None,
-                task_stage: TransferStage::Stock,
-                interval: 3,
-            };
-            sys_set.spawn(async move {
-                stock_status_saver.snapshot_to_file(task_id).await;
-            });
+            // let stock_status_saver = TaskStatusSaver {
+            //     check_point_path: check_point_file.clone(),
+            //     executed_file: compare_source_list.clone(),
+            //     stop_mark: Arc::clone(&snapshot_stop_mark),
+            //     list_file_positon_map: Arc::clone(&offset_map),
+            //     file_for_notify: None,
+            //     task_stage: TransferStage::Stock,
+            //     interval: 3,
+            // };
+            // sys_set.spawn(async move {
+            //     stock_status_saver.snapshot_to_file(task_id).await;
+            // });
 
             // 启动进度条线程
             let map = Arc::clone(&offset_map);
@@ -507,8 +507,8 @@ impl CompareTask {
             // 记录checkpoint
             let mut checkpoint: CheckPoint = CheckPoint {
                 task_id: self.task_id.clone(),
-                executed_file: compare_source_list.clone(),
-                executed_file_position: source_list_file_position.clone(),
+                executing_file: compare_source_list.clone(),
+                executing_file_position: source_list_file_position.clone(),
                 file_for_notify: None,
                 task_stage: TransferStage::Stock,
                 modify_checkpoint_timestamp: 0,

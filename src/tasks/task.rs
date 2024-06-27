@@ -1,8 +1,13 @@
-use super::{CompareTask, TransferTask, TransferType, GLOBAL_TASK_JOINSET};
+use super::{
+    CompareTask, TransferTask, TransferType, GLOBAL_LIVING_TASK_MAP, GLOBAL_TASK_JOINSET,
+    GLOBAL_TASK_STOP_MARK_MAP,
+};
 use crate::{
     commons::{
-        byte_size_str_to_usize, byte_size_usize_to_str, struct_to_yaml_string, LastModifyFilter,
+        byte_size_str_to_usize, byte_size_usize_to_str, struct_to_json_string,
+        struct_to_yaml_string, LastModifyFilter,
     },
+    configure::get_config,
     resources::{CF_TASK, GLOBAL_ROCKSDB},
     s3::OSSDescription,
     tasks::LogInfo,
@@ -85,8 +90,20 @@ pub enum Task {
 }
 
 impl Task {
-    pub fn update_task_id_rand(&mut self) -> i64 {
-        let task_id = task_id_generator();
+    pub fn set_meta_dir(&mut self, meta_dir: &str) {
+        match self {
+            Task::Transfer(transfer) => {
+                transfer.attributes.meta_dir = meta_dir.to_string();
+            }
+            Task::Compare(compare) => {
+                compare.attributes.meta_dir = meta_dir.to_string();
+            }
+            Task::TruncateBucket(truncate) => {
+                truncate.meta_dir = meta_dir.to_string();
+            }
+        }
+    }
+    pub fn set_task_id(&mut self, task_id: &str) {
         match self {
             Task::Transfer(transfer) => {
                 transfer.task_id = task_id.to_string();
@@ -98,33 +115,47 @@ impl Task {
                 truncate.task_id = task_id.to_string();
             }
         }
-        println!("{:?}", task_id);
-        task_id
     }
-    // ToDo
-    // 验证任务冲突；验证任务正确性
-    pub fn create(&self) -> Result<()> {
-        let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
-            Some(cf) => cf,
-            None => return Err(anyhow!("cf is not exist")),
-        };
-        let encoded: Vec<u8> = bincode::serialize(self)?;
-        match self {
-            Task::Transfer(transfer) => {
-                GLOBAL_ROCKSDB.put_cf(&cf, transfer.task_id.as_bytes(), encoded)?;
-            }
-            Task::Compare(compare) => {
-                GLOBAL_ROCKSDB.put_cf(&cf, compare.task_id.as_bytes(), encoded)?;
-            }
-            Task::TruncateBucket(truncate) => {
-                GLOBAL_ROCKSDB.put_cf(&cf, truncate.task_id.as_bytes(), encoded)?;
-            }
-        }
 
+    pub fn get_task_id(&self) -> String {
+        return match self {
+            Task::Transfer(transfer) => transfer.task_id.clone(),
+            Task::Compare(compare) => compare.task_id.clone(),
+            Task::TruncateBucket(truncate) => truncate.task_id.clone(),
+        };
+    }
+
+    pub fn stop(&self) -> Result<()> {
+        let kv = match GLOBAL_TASK_STOP_MARK_MAP.get(&self.get_task_id()) {
+            Some(kv) => kv,
+            None => {
+                return Err(anyhow!("task {} stop mark not exist", self.get_task_id()));
+            }
+        };
+        kv.value().store(true, std::sync::atomic::Ordering::SeqCst);
+        GLOBAL_LIVING_TASK_MAP.remove(&self.get_task_id());
         Ok(())
     }
 
-    pub fn execute(&self) {
+    pub fn create(&mut self) -> Result<i64> {
+        let id = task_id_generator();
+        let global_meta_dir = get_config()?.meta_dir;
+        let meta_dir = gen_file_path(&global_meta_dir, id.to_string().as_str(), "");
+        print!("meta_dir:{:?}", meta_dir);
+        self.set_task_id(id.to_string().as_str());
+        self.set_meta_dir(&meta_dir);
+
+        let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
+            Some(cf) => cf,
+            None => return Err(anyhow!("column family not exist")),
+        };
+
+        let task_json = struct_to_json_string(self)?;
+        GLOBAL_ROCKSDB.put_cf(&cf, id.to_string().as_bytes(), task_json.as_bytes())?;
+        Ok(id)
+    }
+
+    pub async fn execute(&self) {
         let now = Instant::now();
         match self {
             Task::Transfer(transfer) => {
@@ -132,7 +163,7 @@ impl Task {
                     "Transfer Task Start:\n{}",
                     struct_to_yaml_string(transfer).unwrap()
                 );
-                match transfer.execute() {
+                match transfer.execute().await {
                     Ok(_) => {
                         let log_info = LogInfo {
                             task_id: transfer.task_id.clone(),

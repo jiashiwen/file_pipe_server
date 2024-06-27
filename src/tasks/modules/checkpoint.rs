@@ -35,9 +35,9 @@ pub struct CheckPoint {
     pub task_id: String,
     //当前全量对象列表
     // 对象列表命名规则：OBJECT_LIST_FILE_PREFIX+秒级unix 时间戳 'objeclt_list_unixtimestampe'
-    pub executed_file: FileDescription,
+    pub executing_file: FileDescription,
     // 文件执行位置，既执行到的offset，用于断点续传
-    pub executed_file_position: FilePosition,
+    pub executing_file_position: FilePosition,
     pub file_for_notify: Option<String>,
     pub task_stage: TransferStage,
     // 记录 checkpoint 时点的时间戳
@@ -50,8 +50,8 @@ impl Default for CheckPoint {
     fn default() -> Self {
         Self {
             task_id: TaskDefaultParameters::id_default(),
-            executed_file: Default::default(),
-            executed_file_position: FilePosition {
+            executing_file: Default::default(),
+            executing_file_position: FilePosition {
                 offset: 0,
                 line_num: 0,
             },
@@ -73,8 +73,8 @@ impl FromStr for CheckPoint {
 
 impl CheckPoint {
     pub fn seeked_execute_file(&self) -> Result<File> {
-        let mut file = File::open(&self.executed_file.path)?;
-        let seek_offset = TryInto::<u64>::try_into(self.executed_file_position.offset)?;
+        let mut file = File::open(&self.executing_file.path)?;
+        let seek_offset = TryInto::<u64>::try_into(self.executing_file_position.offset)?;
         file.seek(SeekFrom::Start(seek_offset))?;
         Ok(file)
     }

@@ -6,7 +6,7 @@ use crate::configure::{get_config, get_config_file_path, get_current_config_yml,
 use crate::httpserver;
 use crate::resources::init_resources;
 use crate::tasks::{
-    init_tasks_status_server, GLOBAL_STOP_MARK, GLOBAL_TASK_JOINSET, GLOBAL_TASK_RUNTIME,
+    init_tasks_status_server, GLOBAL_TASK_JOINSET, GLOBAL_TASK_RUNTIME, GLOBAL_TASK_STOP_MARK_MAP,
 };
 use clap::{Arg, ArgAction, ArgMatches};
 use fork::{daemon, Fork};
@@ -209,7 +209,10 @@ fn cmd_match(matches: &ArgMatches) {
             for info in &mut signals {
                 // Will print info about signal + where it comes from.
                 log::info!("Received a signal {:?}", info);
-                GLOBAL_STOP_MARK.store(true, std::sync::atomic::Ordering::SeqCst);
+                for kv in GLOBAL_TASK_STOP_MARK_MAP.iter() {
+                    kv.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                // GLOBAL_TASK_STOP_MARK_MAP.store(true, std::sync::atomic::Ordering::SeqCst);
                 match info.signal {
                     SIGTERM => {
                         println!("kill !");

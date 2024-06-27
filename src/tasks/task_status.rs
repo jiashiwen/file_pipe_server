@@ -21,8 +21,8 @@ impl TaskStatusSaver {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let mut checkpoint = CheckPoint {
             task_id,
-            executed_file: self.executed_file.clone(),
-            executed_file_position: FilePosition {
+            executing_file: self.executed_file.clone(),
+            executing_file_position: FilePosition {
                 offset: 0,
                 line_num: 0,
             },
@@ -50,7 +50,7 @@ impl TaskStatusSaver {
                 .min();
 
             self.list_file_positon_map.shrink_to_fit();
-            checkpoint.executed_file_position = file_position.clone();
+            checkpoint.executing_file_position = file_position.clone();
 
             if let Err(e) = checkpoint.save_to(&self.check_point_path) {
                 log::error!("{},{}", e, self.check_point_path);

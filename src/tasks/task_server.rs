@@ -25,10 +25,11 @@ pub static GLOBAL_TASK_JOINSET: Lazy<Arc<RwLock<JoinSet<()>>>> = Lazy::new(|| {
     Arc::new(joinset_rw)
 });
 
-pub static GLOBAL_STOP_MARK: Lazy<Arc<AtomicBool>> = Lazy::new(|| {
-    let mark = AtomicBool::new(false);
-    Arc::new(mark)
-});
+pub static GLOBAL_TASK_STOP_MARK_MAP: Lazy<Arc<DashMap<String, Arc<AtomicBool>>>> =
+    Lazy::new(|| {
+        let map = DashMap::<String, Arc<AtomicBool>>::new();
+        Arc::new(map)
+    });
 
 pub static GLOBAL_LIVING_TASK_MAP: Lazy<Arc<DashMap<String, i128>>> = Lazy::new(|| {
     let map = DashMap::<String, i128>::new();
@@ -61,9 +62,7 @@ pub struct TasksStatusSaver {
 
 impl TasksStatusSaver {
     pub async fn snapshot_to_cf(&self) {
-        log::info!("Task status saver run!");
-        while !GLOBAL_STOP_MARK.load(std::sync::atomic::Ordering::Relaxed) {
-            // for kv in self.living_tasks_map.iter() {
+        loop {
             for kv in GLOBAL_LIVING_TASK_MAP.iter() {
                 // 获取最小offset的FilePosition
                 let taskid = kv.key();
@@ -89,7 +88,7 @@ impl TasksStatusSaver {
                     .min();
 
                 GLOBAL_LIST_FILE_POSITON_MAP.shrink_to_fit();
-                checkpoint.executed_file_position = file_position.clone();
+                checkpoint.executing_file_position = file_position.clone();
 
                 if let Err(e) = checkpoint.save_to_rocksdb_cf() {
                     log::error!("{},{}", e, taskid);
@@ -97,10 +96,48 @@ impl TasksStatusSaver {
                     log::debug!("checkpoint:\n{:?}", checkpoint);
                 };
             }
-
             tokio::time::sleep(tokio::time::Duration::from_secs(self.interval)).await;
-            yield_now().await;
         }
+
+        // while !GLOBAL_TASK_STOP_MARK_MAP.load(std::sync::atomic::Ordering::Relaxed) {
+        //     // for kv in self.living_tasks_map.iter() {
+        //     for kv in GLOBAL_LIVING_TASK_MAP.iter() {
+        //         // 获取最小offset的FilePosition
+        //         let taskid = kv.key();
+        //         let mut checkpoint = match get_checkpoint(taskid) {
+        //             Ok(c) => c,
+        //             Err(e) => {
+        //                 log::error!("{:?}", e);
+        //                 continue;
+        //             }
+        //         };
+        //         let mut file_position = FilePosition {
+        //             offset: 0,
+        //             line_num: 0,
+        //         };
+
+        //         GLOBAL_LIST_FILE_POSITON_MAP
+        //             .iter()
+        //             .filter(|item| item.key().starts_with(taskid))
+        //             .map(|m| {
+        //                 file_position = m.clone();
+        //                 m.offset
+        //             })
+        //             .min();
+
+        //         GLOBAL_LIST_FILE_POSITON_MAP.shrink_to_fit();
+        //         checkpoint.executed_file_position = file_position.clone();
+
+        //         if let Err(e) = checkpoint.save_to_rocksdb_cf() {
+        //             log::error!("{},{}", e, taskid);
+        //         } else {
+        //             log::debug!("checkpoint:\n{:?}", checkpoint);
+        //         };
+        //     }
+
+        //     tokio::time::sleep(tokio::time::Duration::from_secs(self.interval)).await;
+        //     yield_now().await;
+        // }
     }
 }
 
