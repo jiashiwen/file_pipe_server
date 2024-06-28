@@ -4,8 +4,7 @@ use super::{
 };
 use crate::{
     commons::{
-        byte_size_str_to_usize, byte_size_usize_to_str, struct_to_json_string,
-        struct_to_yaml_string, LastModifyFilter,
+        byte_size_str_to_usize, byte_size_usize_to_str, struct_to_json_string, LastModifyFilter,
     },
     configure::get_config,
     resources::{CF_TASK, GLOBAL_ROCKSDB},
@@ -19,7 +18,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use snowflake::SnowflakeIdGenerator;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{
     fs::{self, File},
     io::{self, BufRead},
@@ -156,61 +155,42 @@ impl Task {
     }
 
     pub async fn execute(&self) {
-        let now = Instant::now();
         match self {
-            Task::Transfer(transfer) => {
-                log::info!(
-                    "Transfer Task Start:\n{}",
-                    struct_to_yaml_string(transfer).unwrap()
-                );
-                match transfer.execute().await {
-                    Ok(_) => {
-                        let log_info = LogInfo {
-                            task_id: transfer.task_id.clone(),
-                            msg: "execute ok!".to_string(),
-                            additional: Some(now.elapsed()),
-                        };
-                        log::info!("{:?}", log_info)
-                    }
-                    Err(e) => {
-                        log::error!("{}", e);
-                    }
+            Task::Transfer(transfer) => match transfer.execute().await {
+                Ok(_) => {
+                    let log_info = LogInfo::<String> {
+                        task_id: transfer.task_id.clone(),
+                        msg: "execute ok!".to_string(),
+                        additional: None,
+                    };
+                    log::info!("{:?}", log_info)
                 }
-            }
-            Task::TruncateBucket(truncate) => {
-                log::info!(
-                    "Truncate Task Start:\n{}",
-                    struct_to_yaml_string(truncate).unwrap()
-                );
-                match truncate.exec_multi_threads() {
-                    Ok(_) => {
-                        let log_info = LogInfo {
-                            task_id: truncate.task_id.clone(),
-                            msg: "execute ok!".to_string(),
-                            additional: Some(now.elapsed()),
-                        };
-                        log::info!("{:?}", log_info)
-                    }
-                    Err(e) => log::error!("{:?}", e),
+                Err(e) => {
+                    log::error!("{}", e);
                 }
-            }
-            Task::Compare(compare) => {
-                log::info!(
-                    "Compare Task Start:\n{}",
-                    struct_to_yaml_string(compare).unwrap()
-                );
-                match compare.execute() {
-                    Ok(_) => {
-                        let log_info = LogInfo {
-                            task_id: compare.task_id.clone(),
-                            msg: "execute ok!".to_string(),
-                            additional: Some(now.elapsed()),
-                        };
-                        log::info!("{:?}", log_info)
-                    }
-                    Err(e) => log::error!("{:?}", e),
+            },
+            Task::TruncateBucket(truncate) => match truncate.exec_multi_threads() {
+                Ok(_) => {
+                    let log_info = LogInfo::<String> {
+                        task_id: truncate.task_id.clone(),
+                        msg: "execute ok!".to_string(),
+                        additional: None,
+                    };
+                    log::info!("{:?}", log_info)
                 }
-            }
+                Err(e) => log::error!("{:?}", e),
+            },
+            Task::Compare(compare) => match compare.execute() {
+                Ok(_) => {
+                    let log_info = LogInfo::<String> {
+                        task_id: compare.task_id.clone(),
+                        msg: "execute ok!".to_string(),
+                        additional: None,
+                    };
+                    log::info!("{:?}", log_info)
+                }
+                Err(e) => log::error!("{:?}", e),
+            },
         }
     }
 }

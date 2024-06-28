@@ -5,6 +5,7 @@ target/
 .history
 logs
 /logs/*
+meta_dir/
 /task_example_yml   
 /task_yml
 /examples

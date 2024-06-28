@@ -1,13 +1,14 @@
 use super::{
-    de_usize_from_str, gen_file_path, se_usize_to_str, task_actions::CompareTaskActions,
-    CompareLocal2Local, CompareLocal2Oss, CompareOss2Local, CompareOss2Oss, ObjectStorage,
-    TaskDefaultParameters, TaskStatusSaver, TransferStage, COMPARE_CHECK_POINT_FILE,
-    COMPARE_RESULT_PREFIX, COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX, OFFSET_PREFIX,
+    gen_file_path, task_actions::CompareTaskActions, CompareLocal2Local, CompareLocal2Oss,
+    CompareOss2Local, CompareOss2Oss, ObjectStorage, TaskDefaultParameters, TasksStatusSaver,
+    TransferStage, COMPARE_CHECK_POINT_FILE, COMPARE_RESULT_PREFIX,
+    COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX, OFFSET_PREFIX,
 };
 use super::{get_task_checkpoint, CheckPoint, FileDescription, FilePosition, ListedRecord};
 use crate::commons::{
     json_to_struct, promote_processbar, quantify_processbar, LastModifyFilter, RegexFilter,
 };
+use crate::tasks::{de_usize_from_str, se_usize_to_str};
 use anyhow::anyhow;
 use anyhow::Result;
 use dashmap::DashMap;

@@ -2,29 +2,32 @@ use super::FileDescription;
 use super::LogInfo;
 use super::RecordDescription;
 use super::{
-    de_usize_from_str, gen_file_path, get_task_checkpoint, se_usize_to_str, CheckPoint,
-    FilePosition, ListedRecord, TaskDefaultParameters, TransferStage, OFFSET_PREFIX,
-    TRANSFER_CHECK_POINT_FILE, TRANSFER_OBJECT_LIST_FILE_PREFIX,
+    de_usize_from_str, gen_file_path, se_usize_to_str, CheckPoint, FilePosition, ListedRecord,
+    TaskDefaultParameters, TransferStage, OFFSET_PREFIX, TRANSFER_CHECK_POINT_FILE,
+    TRANSFER_OBJECT_LIST_FILE_PREFIX,
 };
 use super::{
     task_actions::TransferTaskActions, IncrementAssistant, TransferLocal2Local, TransferLocal2Oss,
     TransferOss2Local, TransferOss2Oss,
 };
 use crate::commons::quantify_processbar;
-use crate::commons::Modified;
 use crate::commons::{json_to_struct, LastModifyFilter};
 use crate::resources::get_checkpoint;
-use crate::tasks::TaskStatusSaver;
+use crate::tasks::log_out_living_task;
+use crate::tasks::register_living_task;
 use crate::tasks::GLOBAL_TASK_STOP_MARK_MAP;
 // use crate::tasks::GLOBAL_TASK_JOINSET;
 use crate::{commons::RegexFilter, s3::OSSDescription, tasks::NOTIFY_FILE_PREFIX};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use dashmap::DashMap;
-use rocksdb::checkpoint;
 // use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
+use std::collections::BTreeMap;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use std::{
     fs::{self, File},
     io::{self, BufRead},
@@ -32,11 +35,9 @@ use std::{
         atomic::{AtomicBool, AtomicUsize},
         Arc,
     },
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use tokio::{
-    runtime,
     sync::Mutex,
     task::{self, JoinSet},
 };
@@ -200,6 +201,8 @@ impl TransferTask {
             ObjectStorage::OSS(oss_s) => match &self.target {
                 ObjectStorage::Local(path_t) => {
                     let t = TransferOss2Local {
+                        task_id: self.task_id.clone(),
+                        name: self.name.clone(),
                         source: oss_s.clone(),
                         target: path_t.to_string(),
                         attributes: self.attributes.clone(),
@@ -220,54 +223,14 @@ impl TransferTask {
         }
     }
 
-    pub async fn analyze(&self) -> Result<DashMap<String, i128>> {
+    pub async fn analyze(&self) -> Result<BTreeMap<String, i128>> {
         let task = self.gen_transfer_actions();
         task.analyze_source().await
-        // let rt = runtime::Builder::new_multi_thread()
-        //     .worker_threads(num_cpus::get())
-        //     .enable_all()
-        //     .max_io_events_per_tick(self.attributes.task_parallelism)
-        //     .build()?;
-
-        // rt.block_on(async {
-        //     let map = match task.analyze_source().await {
-        //         Ok(m) => m,
-        //         Err(e) => {
-        //             log::error!("{}", e);
-        //             return;
-        //         }
-        //     };
-
-        //     let mut total_objects = 0;
-        //     for v in map.iter() {
-        //         total_objects += *v.value();
-        //     }
-        //     let total = Decimal::from(total_objects);
-
-        //     let mut builder = Builder::default();
-        //     for kv in map.iter() {
-        //         let val_dec = Decimal::from(*kv.value());
-
-        //         let key = kv.key().to_string();
-        //         let val = kv.value().to_string();
-        //         let percent = (val_dec / total).round_dp(2).to_string();
-        //         let raw = vec![key, val, percent];
-        //         builder.push_record(raw);
-        //     }
-
-        //     let header = vec!["size_range", "objects", "percent"];
-        //     // builder.set_header(header);
-        //     builder.insert_record(0, header);
-
-        //     let mut table = builder.build();
-        //     table.with(Style::ascii_rounded());
-        //     println!("{}", table);
-        // });
     }
 
     pub async fn execute(&self) -> Result<()> {
         let task = self.gen_transfer_actions();
-        let mut interrupt: bool = false;
+        // let mut interrupt: bool = false;
         // 从checkpoint 执行，且taskstage 处于增量模式时该标识为true，从上次任务起始时间戳开始抓取变化数据并同步
         let mut exec_modified = false;
 
@@ -278,7 +241,9 @@ impl TransferTask {
         GLOBAL_TASK_STOP_MARK_MAP.insert(self.task_id.clone(), snapshot_stop_mark.clone());
 
         let offset_map = Arc::new(DashMap::<String, FilePosition>::new());
-        let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+
+        //注册活动任务
+        let now = register_living_task(&self.task_id)?;
 
         let mut executed_file = FileDescription {
             path: gen_file_path(
@@ -297,7 +262,7 @@ impl TransferTask {
         );
 
         let mut assistant = IncrementAssistant::default();
-        assistant.check_point_path = check_point_file.clone();
+        // assistant.check_point_path = check_point_file.clone();
         let increment_assistant = Arc::new(Mutex::new(assistant));
 
         let regex_filter =
@@ -305,12 +270,6 @@ impl TransferTask {
 
         let mut list_file = None;
         let mut list_file_position = FilePosition::default();
-
-        let rt = runtime::Builder::new_multi_thread()
-            .worker_threads(num_cpus::get())
-            .enable_all()
-            .max_io_events_per_tick(self.attributes.task_parallelism)
-            .build()?;
 
         let log_info: LogInfo<String> = LogInfo {
             task_id: self.task_id.clone(),
@@ -375,9 +334,9 @@ impl TransferTask {
         }
         // });
 
-        if interrupt {
-            return Err(anyhow!("get object list error"));
-        }
+        // if interrupt {
+        //     return Err(anyhow!("get object list error"));
+        // }
         let log_info = LogInfo::<String> {
             task_id: self.task_id.clone(),
             msg: "object list generated".to_string(),
@@ -630,25 +589,23 @@ impl TransferTask {
         while execut_set.len() > 0 {
             execut_set.join_next().await;
         }
-
+        snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
         // 配置停止 offset save 标识为 true
         if self.attributes.transfer_type.is_stock() {
-            snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
-            let lock = increment_assistant.lock().await;
-            let notify = lock.get_notify_file_path();
-            drop(lock);
-
+            let modify_checkpoint_timestamp =
+                i128::from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs());
             // 记录checkpoint
             let mut checkpoint: CheckPoint = CheckPoint {
                 task_id: self.task_id.clone(),
                 executing_file: executed_file.clone(),
                 executing_file_position: list_file_position.clone(),
-                file_for_notify: notify,
+                file_for_notify: None,
                 task_stage: TransferStage::Stock,
-                modify_checkpoint_timestamp: 0,
+                modify_checkpoint_timestamp,
                 task_begin_timestamp: i128::from(now.as_secs()),
             };
             checkpoint.save_to_rocksdb_cf()?;
+            log_out_living_task(&self.task_id);
             return Ok(());
         }
 
@@ -658,6 +615,10 @@ impl TransferTask {
         }
         // });
 
+        let lock = increment_assistant.lock().await;
+        let notify = lock.get_notify_file_path();
+        drop(lock);
+
         // 增量逻辑
         // if self.attributes.transfer_type.is_full() || self.attributes.transfer_type.is_increment() {
         // rt.block_on(async {
@@ -665,6 +626,7 @@ impl TransferTask {
         // let offset_map = Arc::new(DashMap::<String, FilePosition>::new());
         let executing_transfers = Arc::new(RwLock::new(0));
         let task_increment = self.gen_transfer_actions();
+        snapshot_stop_mark.store(false, std::sync::atomic::Ordering::Relaxed);
 
         let _ = task_increment
             .execute_increment(
@@ -679,8 +641,6 @@ impl TransferTask {
             .await;
         // 配置停止 offset save 标识为 true
         snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
-        // });
-        // }
 
         Ok(())
     }

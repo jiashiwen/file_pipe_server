@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicU64, Arc};
 
 #[derive(Debug, Clone)]
 pub struct IncrementAssistant {
-    pub check_point_path: String,
+    // pub check_point_path: String,
     pub local_notify: Option<LocalNotify>,
     pub last_modify_timestamp: Option<i64>,
 }
@@ -12,7 +12,7 @@ impl Default for IncrementAssistant {
         Self {
             last_modify_timestamp: None,
             local_notify: None,
-            check_point_path: "".to_string(),
+            // check_point_path: "".to_string(),
         }
     }
 }

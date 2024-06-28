@@ -6,6 +6,8 @@ use super::{
 use super::{
     get_task_checkpoint, FileDescription, FilePosition, ListedRecord, Opt, RecordDescription,
 };
+use crate::resources::get_checkpoint;
+use crate::tasks::TaskDefaultParameters;
 use crate::{
     commons::{
         json_to_struct, merge_file, promote_processbar, read_lines, struct_to_json_string,
@@ -19,6 +21,7 @@ use aws_sdk_s3::types::Object;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
+use std::collections::BTreeMap;
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, BufRead, Write},
@@ -38,6 +41,10 @@ use walkdir::WalkDir;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub struct TransferOss2Local {
+    #[serde(default = "TaskDefaultParameters::id_default")]
+    pub task_id: String,
+    #[serde(default = "TaskDefaultParameters::name_default")]
+    pub name: String,
     pub source: OSSDescription,
     pub target: String,
     pub attributes: TransferTaskAttributes,
@@ -46,6 +53,8 @@ pub struct TransferOss2Local {
 impl Default for TransferOss2Local {
     fn default() -> Self {
         Self {
+            task_id: TaskDefaultParameters::id_default(),
+            name: TaskDefaultParameters::name_default(),
             source: OSSDescription::default(),
             target: "/tmp".to_string(),
             attributes: TransferTaskAttributes::default(),
@@ -55,7 +64,7 @@ impl Default for TransferOss2Local {
 
 #[async_trait]
 impl TransferTaskActions for TransferOss2Local {
-    async fn analyze_source(&self) -> Result<DashMap<String, i128>> {
+    async fn analyze_source(&self) -> Result<BTreeMap<String, i128>> {
         let regex_filter =
             RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         let client = self.source.gen_oss_client()?;
@@ -375,9 +384,18 @@ impl TransferTaskActions for TransferOss2Local {
         snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         // 循环执行获取lastmodify 大于checkpoint指定的时间戳的对象
-        let lock = assistant.lock().await;
-        let checkpoint_path = lock.check_point_path.clone();
-        let mut checkpoint = match get_task_checkpoint(&lock.check_point_path) {
+        // let lock = assistant.lock().await;
+        // let checkpoint_path = lock.check_point_path.clone();
+        // let mut checkpoint = match get_task_checkpoint(&lock.check_point_path) {
+        //     Ok(c) => c,
+        //     Err(e) => {
+        //         log::error!("{}", e);
+        //         return;
+        //     }
+        // };
+        // checkpoint.task_stage = TransferStage::Increment;
+        // drop(lock);
+        let mut checkpoint = match get_checkpoint(&self.task_id) {
             Ok(c) => c,
             Err(e) => {
                 log::error!("{}", e);
@@ -385,7 +403,13 @@ impl TransferTaskActions for TransferOss2Local {
             }
         };
         checkpoint.task_stage = TransferStage::Increment;
-        drop(lock);
+        match checkpoint.save_to_rocksdb_cf() {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("{}", e);
+                return;
+            }
+        };
 
         let regex_filter =
             match RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include) {
@@ -527,7 +551,8 @@ impl TransferTaskActions for TransferOss2Local {
             };
             checkpoint.executing_file = modified.clone();
             // checkpoint.current_stock_object_list_file = new_object_list_desc.path.clone();
-            let _ = checkpoint.save_to(&checkpoint_path);
+            // let _ = checkpoint.save_to(&checkpoint_path);
+            let _ = checkpoint.save_to_rocksdb_cf();
 
             //递增等待时间
             if modified_file_is_empty {

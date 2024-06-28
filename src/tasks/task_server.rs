@@ -1,15 +1,17 @@
+use crate::resources::get_checkpoint;
+use crate::tasks::FilePosition;
 use anyhow::Result;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::{
     runtime::{self, Runtime},
     sync::RwLock,
-    task::{yield_now, JoinSet},
+    task::JoinSet,
 };
-
-use crate::resources::get_checkpoint;
-use crate::tasks::FilePosition;
 
 pub static GLOBAL_TASK_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
     let rocksdb = match init_task_runtime() {
@@ -31,8 +33,8 @@ pub static GLOBAL_TASK_STOP_MARK_MAP: Lazy<Arc<DashMap<String, Arc<AtomicBool>>>
         Arc::new(map)
     });
 
-pub static GLOBAL_LIVING_TASK_MAP: Lazy<Arc<DashMap<String, i128>>> = Lazy::new(|| {
-    let map = DashMap::<String, i128>::new();
+pub static GLOBAL_LIVING_TASK_MAP: Lazy<Arc<DashMap<String, u64>>> = Lazy::new(|| {
+    let map = DashMap::<String, u64>::new();
     Arc::new(map)
 });
 
@@ -98,50 +100,28 @@ impl TasksStatusSaver {
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(self.interval)).await;
         }
-
-        // while !GLOBAL_TASK_STOP_MARK_MAP.load(std::sync::atomic::Ordering::Relaxed) {
-        //     // for kv in self.living_tasks_map.iter() {
-        //     for kv in GLOBAL_LIVING_TASK_MAP.iter() {
-        //         // 获取最小offset的FilePosition
-        //         let taskid = kv.key();
-        //         let mut checkpoint = match get_checkpoint(taskid) {
-        //             Ok(c) => c,
-        //             Err(e) => {
-        //                 log::error!("{:?}", e);
-        //                 continue;
-        //             }
-        //         };
-        //         let mut file_position = FilePosition {
-        //             offset: 0,
-        //             line_num: 0,
-        //         };
-
-        //         GLOBAL_LIST_FILE_POSITON_MAP
-        //             .iter()
-        //             .filter(|item| item.key().starts_with(taskid))
-        //             .map(|m| {
-        //                 file_position = m.clone();
-        //                 m.offset
-        //             })
-        //             .min();
-
-        //         GLOBAL_LIST_FILE_POSITON_MAP.shrink_to_fit();
-        //         checkpoint.executed_file_position = file_position.clone();
-
-        //         if let Err(e) = checkpoint.save_to_rocksdb_cf() {
-        //             log::error!("{},{}", e, taskid);
-        //         } else {
-        //             log::debug!("checkpoint:\n{:?}", checkpoint);
-        //         };
-        //     }
-
-        //     tokio::time::sleep(tokio::time::Duration::from_secs(self.interval)).await;
-        //     yield_now().await;
-        // }
     }
 }
 
 pub async fn init_tasks_status_server() {
     let server = TasksStatusSaver { interval: 10 };
     server.snapshot_to_cf().await;
+}
+
+pub fn register_living_task(task_id: &str) -> Result<Duration> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+    GLOBAL_LIVING_TASK_MAP.insert(task_id.to_string(), now.as_secs());
+
+    Ok(now)
+}
+
+pub fn log_out_living_task(task_id: &str) {
+    GLOBAL_LIVING_TASK_MAP.remove(task_id);
+}
+
+pub fn task_is_living(task_id: &str) -> bool {
+    return match GLOBAL_LIVING_TASK_MAP.get(task_id) {
+        Some(_) => true,
+        None => false,
+    };
 }

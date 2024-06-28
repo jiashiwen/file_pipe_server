@@ -3,9 +3,12 @@ use crate::commons::LastModifyFilter;
 use anyhow::Result;
 use async_trait::async_trait;
 use dashmap::DashMap;
-use std::sync::{
-    atomic::{AtomicBool, AtomicUsize},
-    Arc,
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    },
 };
 use tokio::{
     sync::{Mutex, RwLock},
@@ -18,7 +21,7 @@ use tokio::{
 // 设计 incrementparameter struct 用于统一存储 lastmodif notify file 以及 notify file size 等原子数据
 #[async_trait]
 pub trait TransferTaskActions {
-    async fn analyze_source(&self) -> Result<DashMap<String, i128>>;
+    async fn analyze_source(&self) -> Result<BTreeMap<String, i128>>;
     // 错误记录重试
     fn error_record_retry(&self, executing_transfers: Arc<RwLock<usize>>) -> Result<()>;
     // 记录列表执行器

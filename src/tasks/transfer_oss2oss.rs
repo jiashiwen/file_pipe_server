@@ -1,6 +1,6 @@
 use super::{
     gen_file_path, task_actions::TransferTaskActions, IncrementAssistant, TransferStage,
-    TransferTaskAttributes, GLOBAL_LIVING_TASK_MAP, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
+    TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
     TRANSFER_ERROR_RECORD_PREFIX,
 };
 use crate::{
@@ -8,10 +8,11 @@ use crate::{
         json_to_struct, merge_file, promote_processbar, read_lines, struct_to_json_string,
         LastModifyFilter, RegexFilter,
     },
+    resources::get_checkpoint,
     s3::{multipart_transfer_obj_paralle_by_range, OSSDescription, OssClient},
     tasks::{
-        get_task_checkpoint, FileDescription, FilePosition, ListedRecord, LogInfo, Opt,
-        RecordDescription, TaskDefaultParameters, GLOBAL_TASK_STOP_MARK_MAP,
+        FileDescription, FilePosition, ListedRecord, LogInfo, Opt, RecordDescription,
+        TaskDefaultParameters,
     },
 };
 use anyhow::{anyhow, Context, Result};
@@ -21,6 +22,7 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
 use std::{
+    collections::BTreeMap,
     fs::{self, File, OpenOptions},
     io::{self, BufRead, Write},
     sync::{
@@ -61,7 +63,7 @@ impl Default for TransferOss2Oss {
 
 #[async_trait]
 impl TransferTaskActions for TransferOss2Oss {
-    async fn analyze_source(&self) -> Result<DashMap<String, i128>> {
+    async fn analyze_source(&self) -> Result<BTreeMap<String, i128>> {
         let regex_filter =
             RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         let client = self.source.gen_oss_client()?;
@@ -446,8 +448,15 @@ impl TransferTaskActions for TransferOss2Oss {
         // 循环执行获取lastmodify 大于checkpoint指定的时间戳的对象
         let lock = assistant.lock().await;
 
-        let checkpoint_path = lock.check_point_path.clone();
-        let mut checkpoint = match get_task_checkpoint(&lock.check_point_path) {
+        // let checkpoint_path = lock.check_point_path.clone();
+        // let mut checkpoint = match get_task_checkpoint(&lock.check_point_path) {
+        //     Ok(c) => c,
+        //     Err(e) => {
+        //         log::error!("{}", e);
+        //         return;
+        //     }
+        // };
+        let mut checkpoint = match get_checkpoint(&self.task_id) {
             Ok(c) => c,
             Err(e) => {
                 log::error!("{}", e);
@@ -602,7 +611,8 @@ impl TransferTaskActions for TransferOss2Oss {
             checkpoint.executing_file = modified.clone();
             checkpoint.task_begin_timestamp = i128::from(now.as_secs());
 
-            let _ = checkpoint.save_to(&checkpoint_path);
+            // let _ = checkpoint.save_to(&checkpoint_path);
+            let _ = checkpoint.save_to_rocksdb_cf();
 
             //递增等待时间
             if modified_file_is_empty {

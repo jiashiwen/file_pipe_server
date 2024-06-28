@@ -1,8 +1,8 @@
 use super::{
     gen_file_path, task_actions::TransferTaskActions, FileDescription, FilePosition,
-    IncrementAssistant, ListedRecord, LocalNotify, Opt, RecordDescription, TaskStatusSaver,
-    TransferStage, TransferTaskAttributes, MODIFIED_PREFIX, NOTIFY_FILE_PREFIX, OFFSET_PREFIX,
-    REMOVED_PREFIX, TRANSFER_ERROR_RECORD_PREFIX,
+    IncrementAssistant, ListedRecord, LocalNotify, Opt, RecordDescription, TransferTaskAttributes,
+    MODIFIED_PREFIX, NOTIFY_FILE_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
+    TRANSFER_ERROR_RECORD_PREFIX,
 };
 use crate::commons::merge_file;
 use crate::commons::struct_to_json_string;
@@ -19,6 +19,7 @@ use aws_sdk_s3::types::Object;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
+use std::collections::BTreeMap;
 use std::io::{BufRead, Seek, SeekFrom};
 use std::sync::Arc;
 use std::{
@@ -28,9 +29,9 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
+use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
-use tokio::{sync::Mutex, task};
 use walkdir::WalkDir;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -59,7 +60,7 @@ impl Default for TransferLocal2Oss {
 
 #[async_trait]
 impl TransferTaskActions for TransferLocal2Oss {
-    async fn analyze_source(&self) -> Result<DashMap<String, i128>> {
+    async fn analyze_source(&self) -> Result<BTreeMap<String, i128>> {
         let filter = RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         analyze_folder_files_size(
             &self.source,
@@ -420,20 +421,19 @@ impl TransferTaskActions for TransferLocal2Oss {
             total_lines: 0,
         };
 
-        let task_status_saver = TaskStatusSaver {
-            check_point_path: assistant.lock().await.check_point_path.clone(),
-            executed_file,
-            stop_mark: Arc::clone(&snapshot_stop_mark),
-            list_file_positon_map: Arc::clone(&offset_map),
-            file_for_notify: Some(local_notify.notify_file_path.clone()),
-            task_stage: TransferStage::Increment,
-            interval: 3,
-        };
-
-        let task_id = self.task_id.clone();
-        task::spawn(async move {
-            task_status_saver.snapshot_to_file(task_id).await;
-        });
+        // let task_status_saver = TaskStatusSaver {
+        //     check_point_path: assistant.lock().await.check_point_path.clone(),
+        //     executed_file,
+        //     stop_mark: Arc::clone(&snapshot_stop_mark),
+        //     list_file_positon_map: Arc::clone(&offset_map),
+        //     file_for_notify: Some(local_notify.notify_file_path.clone()),
+        //     task_stage: TransferStage::Increment,
+        //     interval: 3,
+        // };
+        // let task_id = self.task_id.clone();
+        // task::spawn(async move {
+        //     task_status_saver.snapshot_to_file(task_id).await;
+        // });
 
         let error_file_name = gen_file_path(
             &self.attributes.meta_dir,

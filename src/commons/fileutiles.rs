@@ -3,6 +3,7 @@ use crate::tasks::FileDescription;
 use anyhow::Result;
 use dashmap::DashMap;
 use std::{
+    collections::BTreeMap,
     fs::{self, File, OpenOptions},
     io::{self, BufRead, LineWriter, Read, Write},
     path::Path,
@@ -92,8 +93,8 @@ pub fn analyze_folder_files_size(
     folder: &str,
     regex_filter: Option<RegexFilter>,
     last_modify_filter: Option<LastModifyFilter>,
-) -> Result<DashMap<String, i128>> {
-    let size_map = DashMap::<String, i128>::new();
+) -> Result<BTreeMap<String, i128>> {
+    let mut size_map = BTreeMap::<String, i128>::new();
     for entry in WalkDir::new(folder)
         .into_iter()
         .filter_map(Result::ok)
@@ -124,7 +125,7 @@ pub fn analyze_folder_files_size(
             let obj_size = i128::from(entry.metadata()?.len());
             let key = size_distributed(obj_size);
             let mut size = match size_map.get(&key) {
-                Some(m) => *m.value(),
+                Some(m) => *m,
                 None => 0,
             };
             size += 1;

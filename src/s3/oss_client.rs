@@ -21,7 +21,6 @@ use aws_sdk_s3::{
     operation::create_multipart_upload::CreateMultipartUploadOutput, presigning::PresigningConfig,
 };
 use aws_smithy_types::{body::SdkBody, byte_stream::ByteStream};
-use dashmap::DashMap;
 
 use std::{
     collections::BTreeMap,
@@ -986,8 +985,8 @@ impl OssClient {
         regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         batch_size: i32,
-    ) -> Result<DashMap<String, i128>> {
-        let size_map = DashMap::<String, i128>::new();
+    ) -> Result<BTreeMap<String, i128>> {
+        let mut size_map = BTreeMap::<String, i128>::new();
         let resp = self
             .list_objects(bucket.to_string(), prefix.clone(), batch_size, None)
             .await?;
@@ -1030,7 +1029,7 @@ impl OssClient {
                 let obj_size_i128 = i128::from(obj_size);
                 let map_key = size_distributed(obj_size_i128);
                 let mut map_val = match size_map.get(&map_key) {
-                    Some(m) => *m.value(),
+                    Some(m) => *m,
                     None => 0,
                 };
                 map_val += 1;
@@ -1078,7 +1077,7 @@ impl OssClient {
                     let obj_size_i128 = i128::from(obj_size);
                     let map_key = size_distributed(obj_size_i128);
                     let mut map_val = match size_map.get(&map_key) {
-                        Some(m) => *m.value(),
+                        Some(m) => *m,
                         None => 0,
                     };
                     map_val += 1;

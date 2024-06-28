@@ -1,4 +1,6 @@
+use crate::commons::json_to_struct;
 use crate::tasks::CheckPoint;
+use crate::tasks::Task;
 use anyhow::anyhow;
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -60,4 +62,21 @@ pub fn get_checkpoint(task_id: &str) -> Result<CheckPoint> {
     let checkpoint: CheckPoint = bincode::deserialize(&chekpoint_bytes)?;
 
     Ok(checkpoint)
+}
+
+pub fn get_task(task_id: &str) -> Result<Task> {
+    let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
+        Some(cf) => cf,
+        None => return Err(anyhow!("column family not exist")),
+    };
+
+    let value = GLOBAL_ROCKSDB.get_cf(&cf, task_id)?;
+    return match value {
+        Some(v) => {
+            let task_json_str = String::from_utf8(v)?;
+            let task = json_to_struct::<Task>(task_json_str.as_str())?;
+            Ok(task)
+        }
+        None => Err(anyhow!("task {} not exist", task_id)),
+    };
 }
