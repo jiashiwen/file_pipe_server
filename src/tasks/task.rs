@@ -70,6 +70,14 @@ pub enum TransferStage {
     Increment,
 }
 
+// 任务停止原因，主动停止，或由于错误上线达成停止
+pub enum TaskStopReason {
+    // 正常结束或人为停止
+    Finish,
+    // 任务重错误容忍度达到上线
+    Broken,
+}
+
 /// 任务类别，根据传输方式划分
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum TaskType {
@@ -140,7 +148,6 @@ impl Task {
         let id = task_id_generator();
         let global_meta_dir = get_config()?.meta_dir;
         let meta_dir = gen_file_path(&global_meta_dir, id.to_string().as_str(), "");
-        print!("meta_dir:{:?}", meta_dir);
         self.set_task_id(id.to_string().as_str());
         self.set_meta_dir(&meta_dir);
 

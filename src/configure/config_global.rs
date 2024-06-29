@@ -39,6 +39,12 @@ impl HttpConfig {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct TaskPoolConfig {
+    pub max_execute_parallel: usize,
+    pub max_bigfile_parallel: usize,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub struct RedisPool {
     #[serde(default = "RedisPool::max_size_default")]

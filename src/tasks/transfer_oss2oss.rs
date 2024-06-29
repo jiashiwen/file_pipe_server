@@ -1,6 +1,6 @@
 use super::{
-    gen_file_path, task_actions::TransferTaskActions, IncrementAssistant, TransferStage,
-    TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
+    gen_file_path, get_exec_joinset, task_actions::TransferTaskActions, IncrementAssistant,
+    TransferStage, TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
     TRANSFER_ERROR_RECORD_PREFIX,
 };
 use crate::{
@@ -112,6 +112,7 @@ impl TransferTaskActions for TransferOss2Oss {
                             source: self.source.clone(),
                             target: self.target.clone(),
                             err_counter: Arc::new(AtomicUsize::new(0)),
+                            stop_mark: Arc::new(AtomicBool::new(false)),
                             attributes: self.attributes.clone(),
                             offset_map: Arc::new(DashMap::<String, FilePosition>::new()),
                             list_file_path: p.to_string(),
@@ -128,6 +129,7 @@ impl TransferTaskActions for TransferOss2Oss {
         Ok(())
     }
 
+    // ToDo 使用RwLock<joinset>
     // 记录执行器
     async fn listed_records_transfor(
         &self,
@@ -143,12 +145,14 @@ impl TransferTaskActions for TransferOss2Oss {
             source: self.source.clone(),
             target: self.target.clone(),
             err_counter,
+            stop_mark: stop_mark.clone(),
             offset_map,
             attributes: self.attributes.clone(),
             list_file_path: list_file,
         };
 
-        execute_set.spawn(async move {
+        let exec_set = get_exec_joinset(&self.task_id).unwrap();
+        exec_set.write().await.spawn(async move {
             if let Err(e) = transfer
                 .exec_listed_records(records, executing_transfers)
                 .await
@@ -157,6 +161,16 @@ impl TransferTaskActions for TransferOss2Oss {
                 log::error!("{}", e);
             };
         });
+
+        // execute_set.spawn(async move {
+        //     if let Err(e) = transfer
+        //         .exec_listed_records(records, executing_transfers)
+        //         .await
+        //     {
+        //         stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+        //         log::error!("{}", e);
+        //     };
+        // });
     }
 
     async fn record_descriptions_transfor(
@@ -173,6 +187,7 @@ impl TransferTaskActions for TransferOss2Oss {
             source: self.source.clone(),
             target: self.target.clone(),
             err_counter,
+            stop_mark: stop_mark.clone(),
             offset_map,
             attributes: self.attributes.clone(),
             list_file_path: list_file,
@@ -446,16 +461,6 @@ impl TransferTaskActions for TransferOss2Oss {
         snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         // 循环执行获取lastmodify 大于checkpoint指定的时间戳的对象
-        let lock = assistant.lock().await;
-
-        // let checkpoint_path = lock.check_point_path.clone();
-        // let mut checkpoint = match get_task_checkpoint(&lock.check_point_path) {
-        //     Ok(c) => c,
-        //     Err(e) => {
-        //         log::error!("{}", e);
-        //         return;
-        //     }
-        // };
         let mut checkpoint = match get_checkpoint(&self.task_id) {
             Ok(c) => c,
             Err(e) => {
@@ -464,7 +469,6 @@ impl TransferTaskActions for TransferOss2Oss {
             }
         };
         checkpoint.task_stage = TransferStage::Increment;
-        drop(lock);
 
         let regex_filter =
             match RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include) {
@@ -631,6 +635,8 @@ impl TransferTaskActions for TransferOss2Oss {
 }
 
 impl TransferOss2Oss {
+    //ToDo
+    // record_discriptions_excutor 函数增加 stop_mark 进行停止控制
     async fn record_discriptions_excutor(
         &self,
         joinset: &mut JoinSet<()>,
@@ -644,6 +650,7 @@ impl TransferOss2Oss {
             target: self.target.clone(),
             source: self.source.clone(),
             err_counter,
+            stop_mark: Arc::new(AtomicBool::new(false)),
             offset_map,
             attributes: self.attributes.clone(),
             list_file_path: list_file,
@@ -663,11 +670,13 @@ impl TransferOss2Oss {
     }
 }
 
+// add stop mark to control stop event
 #[derive(Debug, Clone)]
 pub struct TransferOss2OssRecordsExecutor {
     pub source: OSSDescription,
     pub target: OSSDescription,
     pub err_counter: Arc<AtomicUsize>,
+    pub stop_mark: Arc<AtomicBool>,
     pub offset_map: Arc<DashMap<String, FilePosition>>,
     pub attributes: TransferTaskAttributes,
     pub list_file_path: String,
@@ -692,13 +701,23 @@ impl TransferOss2OssRecordsExecutor {
             .create(true)
             .write(true)
             .truncate(true)
-            .open(error_file_name.as_str())?;
+            .open(error_file_name.as_str())
+            .context(format!("{}:{}", file!(), line!()))?;
 
-        let source_client = self.source.gen_oss_client()?;
-        let target_client = self.target.gen_oss_client()?;
+        let source_client =
+            self.source
+                .gen_oss_client()
+                .context(format!("{}:{}", file!(), line!()))?;
+        let target_client =
+            self.target
+                .gen_oss_client()
+                .context(format!("{}:{}", file!(), line!()))?;
         let s_c = Arc::new(source_client);
         let t_c = Arc::new(target_client);
         for record in records {
+            if self.stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(anyhow!("task stopped"));
+            }
             // 插入文件offset记录
             self.offset_map.insert(
                 offset_key.clone(),
@@ -753,14 +772,10 @@ impl TransferOss2OssRecordsExecutor {
         Ok(())
     }
 
-    //Todo
-    // 尝试 source_oss、target_oss 参数 使用Arc<Client>
     async fn listed_record_handler(
         &self,
         executing_transfers: Arc<RwLock<usize>>,
         record: &ListedRecord,
-        // source_oss: &OssClient,
-        // target_oss: &OssClient,
         source_oss: &Arc<OssClient>,
         target_oss: &Arc<OssClient>,
         target_key: &str,
@@ -815,24 +830,7 @@ impl TransferOss2OssRecordsExecutor {
                     .await
             }
             false => {
-                // let s_c = Arc::new(source_oss.client.clone());
-                // let s_c = source_oss.clone();
                 let e_t = Arc::clone(&executing_transfers);
-                // target_oss
-                //     .multipart_upload_obj_paralle_by_range(
-                //         s_c,
-                //         &self.source.bucket,
-                //         record.key.as_str(),
-                //         &self.target.bucket,
-                //         target_key,
-                //         expr,
-                //         e_t,
-                //         self.attributes.multi_part_chunk_size,
-                //         self.attributes.multi_part_chunks_per_batch,
-                //         self.attributes.multi_part_parallelism,
-                //     )
-                //     .await
-
                 multipart_transfer_obj_paralle_by_range(
                     source_oss.clone(),
                     &self.source.bucket,

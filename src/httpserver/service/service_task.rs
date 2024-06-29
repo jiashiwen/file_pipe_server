@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fs};
 
 use crate::{
     commons::{json_to_struct, struct_to_json_string},
@@ -25,7 +25,10 @@ pub fn service_remove_task(task_ids: Vec<String>) -> Result<()> {
     };
 
     for id in task_ids {
+        let global_meta_dir = get_config()?.meta_dir;
+        let meta_dir = gen_file_path(&global_meta_dir, id.as_str(), "");
         GLOBAL_ROCKSDB.delete_cf(&cf, id)?;
+        fs::remove_dir(meta_dir)?
     }
 
     Ok(())
@@ -47,6 +50,9 @@ pub fn service_update_task(task_id: &str, task: &mut Task) -> Result<()> {
 
 pub fn service_start_task(task_id: &str) -> Result<()> {
     let task = get_task(task_id)?;
+    if task_is_living(task_id) {
+        return Err(anyhow!("task {} is living", task_id));
+    }
     GLOBAL_TASK_RUNTIME.spawn(async move { task.execute().await });
     // 检查任务生存状态
     Ok(())

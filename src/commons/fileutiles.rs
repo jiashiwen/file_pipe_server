@@ -1,7 +1,6 @@
 use super::{rand_util::rand_string, size_distributed, LastModifyFilter, RegexFilter};
 use crate::tasks::FileDescription;
 use anyhow::Result;
-use dashmap::DashMap;
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},

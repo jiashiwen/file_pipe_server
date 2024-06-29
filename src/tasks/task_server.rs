@@ -1,5 +1,6 @@
 use crate::resources::get_checkpoint;
 use crate::tasks::FilePosition;
+use anyhow::anyhow;
 use anyhow::Result;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
@@ -26,6 +27,23 @@ pub static GLOBAL_TASK_JOINSET: Lazy<Arc<RwLock<JoinSet<()>>>> = Lazy::new(|| {
     let joinset_rw = RwLock::new(joinset);
     Arc::new(joinset_rw)
 });
+
+pub static GLOBAL_TASKS_SYS_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>>>>> =
+    Lazy::new(|| {
+        let map: DashMap<String, Arc<RwLock<JoinSet<()>>>> = DashMap::new();
+        map
+    });
+pub static GLOBAL_TASKS_EXEC_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>>>>> =
+    Lazy::new(|| {
+        let map: DashMap<String, Arc<RwLock<JoinSet<()>>>> = DashMap::new();
+        map
+    });
+
+pub static GLOBAL_TASKS_BIGFILE_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>>>>> =
+    Lazy::new(|| {
+        let map: DashMap<String, Arc<RwLock<JoinSet<()>>>> = DashMap::new();
+        map
+    });
 
 pub static GLOBAL_TASK_STOP_MARK_MAP: Lazy<Arc<DashMap<String, Arc<AtomicBool>>>> =
     Lazy::new(|| {
@@ -124,4 +142,18 @@ pub fn task_is_living(task_id: &str) -> bool {
         Some(_) => true,
         None => false,
     };
+}
+
+pub fn get_exec_joinset(task_id: &str) -> Result<Arc<RwLock<JoinSet<()>>>> {
+    let kv = match GLOBAL_TASKS_EXEC_JOINSET.get(task_id) {
+        Some(s) => s,
+        None => return Err(anyhow!("execute joinset not exist")),
+    };
+
+    let exec_set = kv.value().clone();
+
+    // .value()
+    // .clone();
+
+    Ok(exec_set)
 }
