@@ -27,7 +27,8 @@ pub trait TransferTaskActions {
     // 记录列表执行器
     async fn listed_records_transfor(
         &self,
-        execute_set: &mut JoinSet<()>,
+        // execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<ListedRecord>,
         stop_mark: Arc<AtomicBool>,
@@ -39,7 +40,8 @@ pub trait TransferTaskActions {
     // 记录描述表执行器
     async fn record_descriptions_transfor(
         &self,
-        execute_set: &mut JoinSet<()>,
+        // execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
         stop_mark: Arc<AtomicBool>,
@@ -67,7 +69,8 @@ pub trait TransferTaskActions {
     // 执行增量任务
     async fn execute_increment(
         &self,
-        execute_set: &mut JoinSet<()>,
+        // execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
         err_counter: Arc<AtomicUsize>,

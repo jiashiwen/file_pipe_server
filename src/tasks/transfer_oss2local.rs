@@ -309,7 +309,8 @@ impl TransferTaskActions for TransferOss2Local {
 
     async fn listed_records_transfor(
         &self,
-        execute_set: &mut JoinSet<()>,
+        // execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<ListedRecord>,
         stop_mark: Arc<AtomicBool>,
@@ -326,7 +327,7 @@ impl TransferTaskActions for TransferOss2Local {
             list_file_path: list_file,
         };
 
-        execute_set.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = oss2local
                 .exec_listed_records(records, executing_transfers)
                 .await
@@ -339,7 +340,8 @@ impl TransferTaskActions for TransferOss2Local {
 
     async fn record_descriptions_transfor(
         &self,
-        joinset: &mut JoinSet<()>,
+        // joinset: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
         stop_mark: Arc<AtomicBool>,
@@ -356,7 +358,7 @@ impl TransferTaskActions for TransferOss2Local {
             list_file_path: list_file,
         };
 
-        joinset.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = oss2local.exec_record_descriptions(records).await {
                 stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
                 log::error!("{}", e);
@@ -376,7 +378,8 @@ impl TransferTaskActions for TransferOss2Local {
 
     async fn execute_increment(
         &self,
-        mut execute_set: &mut JoinSet<()>,
+        // mut execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
         err_counter: Arc<AtomicUsize>,
@@ -491,12 +494,13 @@ impl TransferTaskActions for TransferOss2Local {
                     .to_string()
                     .eq(&self.attributes.objects_per_batch.to_string())
                 {
-                    while execute_set.len() >= self.attributes.task_parallelism {
-                        execute_set.join_next().await;
+                    while execute_set.read().await.len() >= self.attributes.task_parallelism {
+                        execute_set.write().await.join_next().await;
                     }
                     let vk = vec_keys.clone();
                     self.record_discriptions_excutor(
-                        &mut execute_set,
+                        // &mut execute_set,
+                        execute_set.clone(),
                         vk,
                         Arc::clone(&err_counter),
                         Arc::clone(&offset_map),
@@ -514,13 +518,14 @@ impl TransferTaskActions for TransferOss2Local {
                 && err_counter.load(std::sync::atomic::Ordering::SeqCst)
                     < self.attributes.max_errors
             {
-                while execute_set.len() >= self.attributes.task_parallelism {
-                    execute_set.join_next().await;
+                while execute_set.read().await.len() >= self.attributes.task_parallelism {
+                    execute_set.write().await.join_next().await;
                 }
 
                 let vk = vec_keys.clone();
                 self.record_discriptions_excutor(
-                    &mut execute_set,
+                    // &mut execute_set,
+                    execute_set.clone(),
                     vk,
                     Arc::clone(&err_counter),
                     Arc::clone(&offset_map),
@@ -529,8 +534,8 @@ impl TransferTaskActions for TransferOss2Local {
                 .await;
             }
 
-            while execute_set.len() > 0 {
-                execute_set.join_next().await;
+            while execute_set.read().await.len() > 0 {
+                execute_set.write().await.join_next().await;
             }
 
             finished_total_objects += modified.total_lines;
@@ -572,7 +577,8 @@ impl TransferTaskActions for TransferOss2Local {
 impl TransferOss2Local {
     async fn record_discriptions_excutor(
         &self,
-        joinset: &mut JoinSet<()>,
+        // joinset: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         records: Vec<RecordDescription>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
@@ -587,7 +593,7 @@ impl TransferOss2Local {
             list_file_path: list_file,
         };
 
-        joinset.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = download.exec_record_descriptions(records).await {
                 download
                     .err_counter

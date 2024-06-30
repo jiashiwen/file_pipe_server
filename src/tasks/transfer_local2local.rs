@@ -109,7 +109,8 @@ impl TransferTaskActions for TransferLocal2Local {
 
     async fn listed_records_transfor(
         &self,
-        execute_set: &mut JoinSet<()>,
+        // execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         _executing_transfers: Arc<RwLock<usize>>,
         records: Vec<ListedRecord>,
         stop_mark: Arc<AtomicBool>,
@@ -126,7 +127,7 @@ impl TransferTaskActions for TransferLocal2Local {
             list_file_path: list_file,
         };
 
-        execute_set.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = local2local.exec_listed_records(records).await {
                 stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
                 log::error!("{}", e);
@@ -136,7 +137,8 @@ impl TransferTaskActions for TransferLocal2Local {
 
     async fn record_descriptions_transfor(
         &self,
-        joinset: &mut JoinSet<()>,
+        // joinset: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
         stop_mark: Arc<AtomicBool>,
@@ -153,7 +155,7 @@ impl TransferTaskActions for TransferLocal2Local {
             list_file_path: list_file,
         };
 
-        joinset.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = local2local.exec_record_descriptions(records).await {
                 stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
                 log::error!("{}", e);
@@ -336,7 +338,8 @@ impl TransferTaskActions for TransferLocal2Local {
 
     async fn execute_increment(
         &self,
-        _joinset: &mut JoinSet<()>,
+        // _joinset: &mut JoinSet<()>,
+        _execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
         err_counter: Arc<AtomicUsize>,

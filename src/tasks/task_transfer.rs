@@ -335,7 +335,7 @@ impl TransferTask {
         // sys_set 用于执行checkpoint、notify等辅助任务
         // let mut sys_set = JoinSet::new();
         // execut_set 用于执行任务
-        let mut execut_set = JoinSet::new();
+        // let mut execut_set = JoinSet::new();
         let task_exec_set = Arc::new(RwLock::new(JoinSet::<()>::new()));
         GLOBAL_TASKS_EXEC_JOINSET.insert(self.task_id.clone(), task_exec_set.clone());
         // 正在执行的任务数量，用于控制分片上传并行度
@@ -404,9 +404,9 @@ impl TransferTask {
                     .to_string()
                     .eq(&self.attributes.objects_per_batch.to_string())
                 {
-                    while execut_set.len() >= self.attributes.task_parallelism {
-                        execut_set.join_next().await;
-                    }
+                    // while execut_set.len() >= self.attributes.task_parallelism {
+                    //     execut_set.join_next().await;
+                    // }
                     while task_exec_set.read().await.len() >= self.attributes.task_parallelism {
                         task_exec_set.write().await.join_next().await;
                     }
@@ -414,7 +414,8 @@ impl TransferTask {
                     let vk: Vec<RecordDescription> = vec_keys.clone();
                     task_modify
                         .record_descriptions_transfor(
-                            &mut execut_set,
+                            // &mut execut_set,
+                            task_exec_set.clone(),
                             Arc::clone(&executing_transfers),
                             vk,
                             Arc::clone(&snapshot_stop_mark),
@@ -434,16 +435,17 @@ impl TransferTask {
                 && err_counter.load(std::sync::atomic::Ordering::SeqCst)
                     < self.attributes.max_errors
             {
-                while execut_set.len() >= self.attributes.task_parallelism {
-                    execut_set.join_next().await;
-                }
+                // while execut_set.len() >= self.attributes.task_parallelism {
+                //     execut_set.join_next().await;
+                // }
                 while task_exec_set.read().await.len() >= self.attributes.task_parallelism {
                     task_exec_set.write().await.join_next().await;
                 }
                 let vk = vec_keys.clone();
                 task_modify
                     .record_descriptions_transfor(
-                        &mut execut_set,
+                        // &mut execut_set,
+                        task_exec_set.clone(),
                         Arc::clone(&executing_transfers),
                         vk,
                         Arc::clone(&snapshot_stop_mark),
@@ -538,9 +540,9 @@ impl TransferTask {
                             return Ok(());
                         }
 
-                        while execut_set.len() >= self.attributes.task_parallelism {
-                            execut_set.join_next().await;
-                        }
+                        // while execut_set.len() >= self.attributes.task_parallelism {
+                        //     execut_set.join_next().await;
+                        // }
                         while task_exec_set.read().await.len() >= self.attributes.task_parallelism {
                             task_exec_set.write().await.join_next().await;
                         }
@@ -548,7 +550,8 @@ impl TransferTask {
 
                         task_stock
                             .listed_records_transfor(
-                                &mut execut_set,
+                                // &mut execut_set,
+                                task_exec_set.clone(),
                                 Arc::clone(&executing_transfers),
                                 vk,
                                 Arc::clone(&snapshot_stop_mark),
@@ -589,9 +592,9 @@ impl TransferTask {
             }
         }
 
-        while execut_set.len() > 0 {
-            execut_set.join_next().await;
-        }
+        // while execut_set.len() > 0 {
+        //     execut_set.join_next().await;
+        // }
 
         while task_exec_set.read().await.len() > 0 {
             task_exec_set.write().await.join_next().await;
@@ -639,7 +642,8 @@ impl TransferTask {
 
             let _ = task_increment
                 .execute_increment(
-                    &mut execut_set,
+                    // &mut execut_set,
+                    task_exec_set.clone(),
                     executing_transfers,
                     Arc::clone(&increment_assistant),
                     Arc::clone(&err_counter),

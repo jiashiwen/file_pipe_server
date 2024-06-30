@@ -133,7 +133,8 @@ impl TransferTaskActions for TransferOss2Oss {
     // 记录执行器
     async fn listed_records_transfor(
         &self,
-        execute_set: &mut JoinSet<()>,
+        // execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<ListedRecord>,
         stop_mark: Arc<AtomicBool>,
@@ -151,8 +152,7 @@ impl TransferTaskActions for TransferOss2Oss {
             list_file_path: list_file,
         };
 
-        let exec_set = get_exec_joinset(&self.task_id).unwrap();
-        exec_set.write().await.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = transfer
                 .exec_listed_records(records, executing_transfers)
                 .await
@@ -161,6 +161,17 @@ impl TransferTaskActions for TransferOss2Oss {
                 log::error!("{}", e);
             };
         });
+
+        // let exec_set = get_exec_joinset(&self.task_id).unwrap();
+        // exec_set.write().await.spawn(async move {
+        //     if let Err(e) = transfer
+        //         .exec_listed_records(records, executing_transfers)
+        //         .await
+        //     {
+        //         stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+        //         log::error!("{}", e);
+        //     };
+        // });
 
         // execute_set.spawn(async move {
         //     if let Err(e) = transfer
@@ -175,7 +186,8 @@ impl TransferTaskActions for TransferOss2Oss {
 
     async fn record_descriptions_transfor(
         &self,
-        joinset: &mut JoinSet<()>,
+        // joinset: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
         stop_mark: Arc<AtomicBool>,
@@ -193,7 +205,7 @@ impl TransferTaskActions for TransferOss2Oss {
             list_file_path: list_file,
         };
 
-        joinset.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = transfer
                 .exec_record_descriptions(executing_transfers, records)
                 .await
@@ -453,7 +465,8 @@ impl TransferTaskActions for TransferOss2Oss {
 
     async fn execute_increment(
         &self,
-        mut execute_set: &mut JoinSet<()>,
+        // mut execute_set: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
         err_counter: Arc<AtomicUsize>,
@@ -548,12 +561,13 @@ impl TransferTaskActions for TransferOss2Oss {
                     .to_string()
                     .eq(&self.attributes.objects_per_batch.to_string())
                 {
-                    while execute_set.len() >= self.attributes.task_parallelism {
-                        execute_set.join_next().await;
+                    while execute_set.read().await.len() >= self.attributes.task_parallelism {
+                        execute_set.write().await.join_next().await;
                     }
                     let vk = vec_keys.clone();
                     self.record_discriptions_excutor(
-                        &mut execute_set,
+                        // &mut execute_set,
+                        execute_set.clone(),
                         executing_transfers.clone(),
                         vk,
                         Arc::clone(&err_counter),
@@ -572,13 +586,14 @@ impl TransferTaskActions for TransferOss2Oss {
                 && err_counter.load(std::sync::atomic::Ordering::SeqCst)
                     < self.attributes.max_errors
             {
-                while execute_set.len() >= self.attributes.task_parallelism {
-                    execute_set.join_next().await;
+                while execute_set.read().await.len() >= self.attributes.task_parallelism {
+                    execute_set.write().await.join_next().await;
                 }
 
                 let vk = vec_keys.clone();
                 self.record_discriptions_excutor(
-                    &mut execute_set,
+                    // &mut execute_set,
+                    execute_set.clone(),
                     executing_transfers.clone(),
                     vk,
                     Arc::clone(&err_counter),
@@ -588,8 +603,8 @@ impl TransferTaskActions for TransferOss2Oss {
                 .await;
             }
 
-            while execute_set.len() > 0 {
-                execute_set.join_next().await;
+            while execute_set.read().await.len() > 0 {
+                execute_set.write().await.join_next().await;
             }
 
             finished_total_objects += modified.total_lines;
@@ -639,7 +654,8 @@ impl TransferOss2Oss {
     // record_discriptions_excutor 函数增加 stop_mark 进行停止控制
     async fn record_discriptions_excutor(
         &self,
-        joinset: &mut JoinSet<()>,
+        // joinset: &mut JoinSet<()>,
+        execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
         err_counter: Arc<AtomicUsize>,
@@ -656,7 +672,7 @@ impl TransferOss2Oss {
             list_file_path: list_file,
         };
 
-        joinset.spawn(async move {
+        execute_set.write().await.spawn(async move {
             if let Err(e) = oss2oss
                 .exec_record_descriptions(executing_transfers, records)
                 .await
