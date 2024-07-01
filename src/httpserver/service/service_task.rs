@@ -1,3 +1,4 @@
+use core::task;
 use std::{collections::BTreeMap, fs};
 
 use crate::{
@@ -59,18 +60,23 @@ pub fn service_start_task(task_id: &str) -> Result<()> {
 }
 
 pub fn service_stop_task(task_id: &str) -> Result<()> {
-    return match task_is_living(task_id) {
-        true => match GLOBAL_TASK_STOP_MARK_MAP.get_mut(task_id) {
-            Some(mask) => {
-                mask.value()
-                    .store(true, std::sync::atomic::Ordering::SeqCst);
-                log_out_living_task(task_id);
-                Ok(())
-            }
-            None => Err(anyhow!("task stop mask not exist")),
-        },
-        false => Ok(()),
-    };
+    if !task_is_living(task_id) {
+        return Err(anyhow!("task not living"));
+    }
+    let task = get_task(task_id)?;
+    task.stop()
+    // return match task_is_living(task_id) {
+    //     true => match GLOBAL_TASK_STOP_MARK_MAP.get_mut(task_id) {
+    //         Some(mask) => {
+    //             mask.value()
+    //                 .store(true, std::sync::atomic::Ordering::SeqCst);
+    //             log_out_living_task(task_id);
+    //             Ok(())
+    //         }
+    //         None => Err(anyhow!("task stop mask not exist")),
+    //     },
+    //     false => Ok(()),
+    // };
 }
 
 pub async fn service_analyze_task(task_id: &str) -> Result<BTreeMap<String, i128>> {

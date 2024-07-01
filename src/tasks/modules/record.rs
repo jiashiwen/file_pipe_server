@@ -85,7 +85,6 @@ impl RecordDescription {
             file_position_key.to_string(),
             self.list_file_position.clone(),
         );
-
         err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let _ = self.save_json_to_file(save_to);
     }

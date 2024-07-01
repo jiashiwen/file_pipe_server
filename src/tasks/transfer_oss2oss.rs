@@ -1,6 +1,6 @@
 use super::{
-    gen_file_path, get_exec_joinset, task_actions::TransferTaskActions, IncrementAssistant,
-    TransferStage, TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
+    gen_file_path, task_actions::TransferTaskActions, IncrementAssistant, TransferStage,
+    TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
     TRANSFER_ERROR_RECORD_PREFIX,
 };
 use crate::{
@@ -161,17 +161,6 @@ impl TransferTaskActions for TransferOss2Oss {
                 log::error!("{}", e);
             };
         });
-
-        // let exec_set = get_exec_joinset(&self.task_id).unwrap();
-        // exec_set.write().await.spawn(async move {
-        //     if let Err(e) = transfer
-        //         .exec_listed_records(records, executing_transfers)
-        //         .await
-        //     {
-        //         stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
-        //         log::error!("{}", e);
-        //     };
-        // });
 
         // execute_set.spawn(async move {
         //     if let Err(e) = transfer
@@ -731,8 +720,16 @@ impl TransferOss2OssRecordsExecutor {
         let s_c = Arc::new(source_client);
         let t_c = Arc::new(target_client);
         for record in records {
+            //判断任务停止标识是否为true，为true 停止任务
             if self.stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
-                return Err(anyhow!("task stopped"));
+                match self
+                    .err_counter
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                    .ge(&self.attributes.max_errors)
+                {
+                    true => return Err(anyhow!("task stopped")),
+                    false => return Ok(()),
+                }
             }
             // 插入文件offset记录
             self.offset_map.insert(
@@ -896,6 +893,17 @@ impl TransferOss2OssRecordsExecutor {
         let t_c = Arc::new(t_client);
 
         for record in records {
+            //判断任务停止标识是否为true，为true 停止任务
+            if self.stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
+                match self
+                    .err_counter
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                    .ge(&self.attributes.max_errors)
+                {
+                    true => return Err(anyhow!("task stopped")),
+                    false => return Ok(()),
+                }
+            }
             // 记录执行文件位置
             self.offset_map
                 .insert(offset_key.clone(), record.list_file_position.clone());

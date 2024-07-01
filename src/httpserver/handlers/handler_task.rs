@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::HandlerResult;
+use crate::tasks::TransferTaskStatus;
 use crate::{
     httpserver::{
         exception::{AppError, AppErrorType},
@@ -10,7 +11,7 @@ use crate::{
             service_start_task, service_stop_task, service_task_create, service_update_task,
         },
     },
-    tasks::{Task, GLOBAL_LIVING_TASK_MAP},
+    tasks::{Task, GLOBAL_LIVING_TRANSFER_TASK_MAP},
 };
 use axum::Json;
 use serde_json::{json, Value};
@@ -139,10 +140,10 @@ pub async fn task_all() -> HandlerResult<Vec<RespListTask>> {
     }
 }
 
-pub async fn task_all_living() -> HandlerResult<HashMap<String, u64>> {
+pub async fn task_all_living() -> HandlerResult<HashMap<String, TransferTaskStatus>> {
     let mut map = HashMap::new();
-    for item in GLOBAL_LIVING_TASK_MAP.iter() {
-        map.insert(item.key().to_string(), *item.value());
+    for item in GLOBAL_LIVING_TRANSFER_TASK_MAP.iter() {
+        map.insert(item.key().to_string(), item.value().clone());
     }
     Ok(Json(Response::ok(map)))
 }

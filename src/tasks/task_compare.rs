@@ -419,9 +419,10 @@ impl CompareTask {
             let map = Arc::clone(&offset_map);
             let stop_mark = Arc::clone(&snapshot_stop_mark);
             let total = compare_source_list.total_lines;
+            let id = self.task_id.clone();
             sys_set.spawn(async move {
                 // Todo 调整进度条
-                quantify_processbar(total, stop_mark, map, OFFSET_PREFIX).await;
+                quantify_processbar(id, total, stop_mark, map, OFFSET_PREFIX).await;
             });
             let task_compare = self.gen_compare_actions();
             let mut vec_keys = vec![];

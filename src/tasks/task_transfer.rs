@@ -1,6 +1,7 @@
 use super::FileDescription;
 use super::LogInfo;
 use super::RecordDescription;
+use super::TaskStopReason;
 use super::{
     de_usize_from_str, gen_file_path, se_usize_to_str, CheckPoint, FilePosition, ListedRecord,
     TaskDefaultParameters, TransferStage, OFFSET_PREFIX, TRANSFER_OBJECT_LIST_FILE_PREFIX,
@@ -13,7 +14,7 @@ use crate::commons::quantify_processbar;
 use crate::commons::{json_to_struct, LastModifyFilter};
 use crate::resources::get_checkpoint;
 use crate::tasks::log_out_living_task;
-use crate::tasks::register_living_task;
+use crate::tasks::save_task_status;
 use crate::tasks::task_is_living;
 use crate::tasks::GLOBAL_TASKS_EXEC_JOINSET;
 use crate::tasks::GLOBAL_TASKS_SYS_JOINSET;
@@ -40,6 +41,83 @@ use tokio::{
     task::{self, JoinSet},
 };
 use walkdir::WalkDir;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum TransferTaskStatusType {
+    Starting,
+    Running(TransferStage),
+    Stopped(TaskStopReason),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TransferTaskStatus {
+    pub task_id: String,
+    pub start_time: u64,
+    pub status: TransferTaskStatusType,
+}
+
+impl TransferTaskStatusType {
+    pub fn is_starting(&self) -> bool {
+        match self {
+            TransferTaskStatusType::Starting => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_stock_running(&self) -> bool {
+        match self {
+            TransferTaskStatusType::Running(ts) => match ts {
+                TransferStage::Stock => true,
+                TransferStage::Increment => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_running(&self) -> bool {
+        match self {
+            TransferTaskStatusType::Running(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_increment_running(&self) -> bool {
+        match self {
+            TransferTaskStatusType::Running(ts) => match ts {
+                TransferStage::Stock => false,
+                TransferStage::Increment => true,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        match self {
+            TransferTaskStatusType::Stopped(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_stopped_finish(&self) -> bool {
+        match self {
+            TransferTaskStatusType::Stopped(s) => match s {
+                TaskStopReason::Finish => true,
+                TaskStopReason::Broken => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_stopped_broken(&self) -> bool {
+        match self {
+            TransferTaskStatusType::Stopped(s) => match s {
+                TaskStopReason::Finish => false,
+                TaskStopReason::Broken => true,
+            },
+            _ => false,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
@@ -239,9 +317,14 @@ impl TransferTask {
         GLOBAL_TASK_STOP_MARK_MAP.insert(self.task_id.clone(), snapshot_stop_mark.clone());
 
         let offset_map = Arc::new(DashMap::<String, FilePosition>::new());
-
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         //注册活动任务
-        let now = register_living_task(&self.task_id)?;
+        let task_status = TransferTaskStatus {
+            task_id: self.task_id.clone(),
+            start_time: now.as_secs(),
+            status: TransferTaskStatusType::Starting,
+        };
+        save_task_status(&self.task_id, task_status);
 
         let mut executed_file = FileDescription {
             path: gen_file_path(
@@ -270,7 +353,6 @@ impl TransferTask {
         // let pd = promote_processbar("Generating object list ...");
 
         // 生成执行文件
-        // rt.block_on(async {
         if self.attributes.start_from_checkpoint {
             // 正在执行的任务数量，用于控制分片上传并行度
             let executing_transfers = Arc::new(RwLock::new(0));
@@ -328,6 +410,14 @@ impl TransferTask {
             additional: None,
         };
         log::info!("{:?}", log_info);
+
+        //注册任务状态为stock
+        let task_status = TransferTaskStatus {
+            task_id: self.task_id.clone(),
+            start_time: now.as_secs(),
+            status: TransferTaskStatusType::Running(TransferStage::Stock),
+        };
+        save_task_status(&self.task_id, task_status);
 
         let sys_set = Arc::new(RwLock::new(JoinSet::<()>::new()));
         GLOBAL_TASKS_SYS_JOINSET.insert(self.task_id.clone(), sys_set.clone());
@@ -404,9 +494,6 @@ impl TransferTask {
                     .to_string()
                     .eq(&self.attributes.objects_per_batch.to_string())
                 {
-                    // while execut_set.len() >= self.attributes.task_parallelism {
-                    //     execut_set.join_next().await;
-                    // }
                     while task_exec_set.read().await.len() >= self.attributes.task_parallelism {
                         task_exec_set.write().await.join_next().await;
                     }
@@ -435,9 +522,6 @@ impl TransferTask {
                 && err_counter.load(std::sync::atomic::Ordering::SeqCst)
                     < self.attributes.max_errors
             {
-                // while execut_set.len() >= self.attributes.task_parallelism {
-                //     execut_set.join_next().await;
-                // }
                 while task_exec_set.read().await.len() >= self.attributes.task_parallelism {
                     task_exec_set.write().await.join_next().await;
                 }
@@ -477,14 +561,12 @@ impl TransferTask {
                 let map = Arc::clone(&offset_map);
                 let stop_mark = Arc::clone(&snapshot_stop_mark);
                 let total = executed_file.total_lines;
+                let id = self.task_id.clone();
                 sys_set.write().await.spawn(async move {
                     // Todo 调整进度条
-                    quantify_processbar(total, stop_mark, map, OFFSET_PREFIX).await;
+                    quantify_processbar(id, total, stop_mark, map, OFFSET_PREFIX).await;
                 });
-                // sys_set.spawn(async move {
-                //     // Todo 调整进度条
-                //     quantify_processbar(total, stop_mark, map, OFFSET_PREFIX).await;
-                // });
+
                 let task_stock = self.gen_transfer_actions();
                 let mut vec_keys: Vec<ListedRecord> = vec![];
                 // 按列表传输object from source to target
@@ -525,24 +607,16 @@ impl TransferTask {
                             && err_counter.load(std::sync::atomic::Ordering::SeqCst)
                                 < self.attributes.max_errors
                     {
-                        let stop_mark = match GLOBAL_TASK_STOP_MARK_MAP.get(&self.task_id) {
-                            Some(mark) => mark.load(std::sync::atomic::Ordering::SeqCst),
-                            None => {
-                                return Err(anyhow!("task {} stop mark not exist", self.task_id));
+                        if snapshot_stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
+                            match err_counter
+                                .load(std::sync::atomic::Ordering::SeqCst)
+                                .ge(&self.attributes.max_errors)
+                            {
+                                true => return Err(anyhow!("task stopped")),
+                                false => return Ok(()),
                             }
-                        };
-
-                        if stop_mark {
-                            println!(
-                                "task max err:{:?},error count:{:?}",
-                                self.attributes.max_errors, err_counter
-                            );
-                            return Ok(());
                         }
 
-                        // while execut_set.len() >= self.attributes.task_parallelism {
-                        //     execut_set.join_next().await;
-                        // }
                         while task_exec_set.read().await.len() >= self.attributes.task_parallelism {
                             task_exec_set.write().await.join_next().await;
                         }
@@ -565,78 +639,50 @@ impl TransferTask {
                         vec_keys.clear();
                     }
                 }
-
-                // 处理集合中的剩余数据，若错误达到上限，则不执行后续操作
-                // if vec_keys.len() > 0
-                // if !vec_keys.is_empty()
-                //     && err_counter.load(std::sync::atomic::Ordering::SeqCst)
-                //         < self.attributes.max_errors
-                // {
-                //     while execut_set.len() >= self.attributes.task_parallelism {
-                //         execut_set.join_next().await;
-                //     }
-                //     let vk = vec_keys.clone();
-
-                //     task_stock
-                //         .listed_records_transfor(
-                //             &mut execut_set,
-                //             Arc::clone(&executing_transfers),
-                //             vk,
-                //             Arc::clone(&snapshot_stop_mark),
-                //             Arc::clone(&err_counter),
-                //             Arc::clone(&offset_map),
-                //             executed_file.path.clone(),
-                //         )
-                //         .await;
-                // }
             }
         }
-
-        // while execut_set.len() > 0 {
-        //     execut_set.join_next().await;
-        // }
 
         while task_exec_set.read().await.len() > 0 {
             task_exec_set.write().await.join_next().await;
         }
 
         // 配置停止 offset save 标识为 true
-        snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
+        // snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
 
+        let modify_checkpoint_timestamp =
+            i128::from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs());
+        // 记录checkpoint
+        let mut checkpoint: CheckPoint = CheckPoint {
+            task_id: self.task_id.clone(),
+            executing_file: executed_file.clone(),
+            executing_file_position: list_file_position.clone(),
+            file_for_notify: None,
+            task_stage: TransferStage::Stock,
+            modify_checkpoint_timestamp,
+            task_begin_timestamp: i128::from(now.as_secs()),
+        };
         if self.attributes.transfer_type.is_stock() {
-            let modify_checkpoint_timestamp =
-                i128::from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs());
-            // 记录checkpoint
-            let mut checkpoint: CheckPoint = CheckPoint {
-                task_id: self.task_id.clone(),
-                executing_file: executed_file.clone(),
-                executing_file_position: list_file_position.clone(),
-                file_for_notify: None,
-                task_stage: TransferStage::Stock,
-                modify_checkpoint_timestamp,
-                task_begin_timestamp: i128::from(now.as_secs()),
-            };
             checkpoint.save_to_rocksdb_cf()?;
             log_out_living_task(&self.task_id);
             return Ok(());
+        } else {
+            checkpoint.task_stage = TransferStage::Increment;
+            checkpoint.save_to_rocksdb_cf()?;
         }
 
         while sys_set.read().await.len() > 0 {
             task::yield_now().await;
             sys_set.write().await.join_next().await;
         }
-        // while sys_set.len() > 0 {
-        //     task::yield_now().await;
-        //     sys_set.join_next().await;
-        // }
 
         let lock = increment_assistant.lock().await;
         let notify = lock.get_notify_file_path();
         drop(lock);
 
         // 增量逻辑
-        if task_is_living(&self.task_id) {
-            snapshot_stop_mark.store(false, std::sync::atomic::Ordering::Relaxed);
+        if task_is_living(&self.task_id)
+            && !snapshot_stop_mark.load(std::sync::atomic::Ordering::Relaxed)
+        {
             let executing_transfers = Arc::new(RwLock::new(0));
             let task_increment = self.gen_transfer_actions();
 

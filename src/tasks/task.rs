@@ -1,5 +1,5 @@
 use super::{
-    CompareTask, TransferTask, TransferType, GLOBAL_LIVING_TASK_MAP, GLOBAL_TASK_JOINSET,
+    CompareTask, TransferTask, TransferType, GLOBAL_LIVING_TRANSFER_TASK_MAP, GLOBAL_TASK_JOINSET,
     GLOBAL_TASK_STOP_MARK_MAP,
 };
 use crate::{
@@ -9,7 +9,10 @@ use crate::{
     configure::get_config,
     resources::{CF_TASK, GLOBAL_ROCKSDB},
     s3::OSSDescription,
-    tasks::LogInfo,
+    tasks::{
+        get_exec_joinset, get_live_transfer_task_status, remove_exec_joinset, save_task_status,
+        LogInfo, TransferTaskStatusType,
+    },
 };
 use anyhow::{anyhow, Result};
 use aws_sdk_s3::types::ObjectIdentifier;
@@ -70,6 +73,7 @@ pub enum TransferStage {
     Increment,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 // 任务停止原因，主动停止，或由于错误上线达成停止
 pub enum TaskStopReason {
     // 正常结束或人为停止
@@ -133,15 +137,21 @@ impl Task {
     }
 
     pub fn stop(&self) -> Result<()> {
-        let kv = match GLOBAL_TASK_STOP_MARK_MAP.get(&self.get_task_id()) {
-            Some(kv) => kv,
-            None => {
-                return Err(anyhow!("task {} stop mark not exist", self.get_task_id()));
+        return match self {
+            Task::Transfer(_) => {
+                let kv = match GLOBAL_TASK_STOP_MARK_MAP.get(&self.get_task_id()) {
+                    Some(kv) => kv,
+                    None => {
+                        return Err(anyhow!("task {} stop mark not exist", self.get_task_id()));
+                    }
+                };
+                let task_status = get_live_transfer_task_status(&self.get_task_id());
+                kv.value().store(true, std::sync::atomic::Ordering::SeqCst);
+                // GLOBAL_LIVING_TRANSFER_TASK_MAP.remove(&self.get_task_id());
+                Ok(())
             }
+            _ => Err(anyhow!("task not transfer task")),
         };
-        kv.value().store(true, std::sync::atomic::Ordering::SeqCst);
-        GLOBAL_LIVING_TASK_MAP.remove(&self.get_task_id());
-        Ok(())
     }
 
     pub fn create(&mut self) -> Result<i64> {
@@ -163,19 +173,34 @@ impl Task {
 
     pub async fn execute(&self) {
         match self {
-            Task::Transfer(transfer) => match transfer.execute().await {
-                Ok(_) => {
-                    let log_info = LogInfo::<String> {
-                        task_id: transfer.task_id.clone(),
-                        msg: "execute ok!".to_string(),
-                        additional: None,
-                    };
-                    log::info!("{:?}", log_info)
+            Task::Transfer(transfer) => {
+                match transfer.execute().await {
+                    Ok(_) => {
+                        //Todo 增加清理逻辑，清理joinset，标志等等
+                        let mut transfer_task_status =
+                            match get_live_transfer_task_status(&transfer.task_id) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    log::error!("{}", e);
+                                    return;
+                                }
+                            };
+                        transfer_task_status.status =
+                            TransferTaskStatusType::Stopped(TaskStopReason::Finish);
+                        save_task_status(&transfer.task_id, transfer_task_status);
+                        let log_info = LogInfo::<String> {
+                            task_id: transfer.task_id.clone(),
+                            msg: "execute ok!".to_string(),
+                            additional: None,
+                        };
+                        log::info!("{:?}", log_info)
+                    }
+                    Err(e) => {
+                        log::error!("{}", e);
+                    }
                 }
-                Err(e) => {
-                    log::error!("{}", e);
-                }
-            },
+                remove_exec_joinset(&transfer.task_id);
+            }
             Task::TruncateBucket(truncate) => match truncate.exec_multi_threads() {
                 Ok(_) => {
                     let log_info = LogInfo::<String> {

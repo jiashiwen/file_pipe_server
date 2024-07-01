@@ -4,15 +4,14 @@ use anyhow::anyhow;
 use anyhow::Result;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
-use tokio::{
-    runtime::{self, Runtime},
-    sync::RwLock,
-    task::JoinSet,
-};
+use std::sync::{atomic::AtomicBool, Arc};
+use tokio::runtime;
+use tokio::runtime::Runtime;
+use tokio::{sync::RwLock, task::JoinSet};
+
+use super::TransferTaskStatus;
+
+// use super::TransferTaskStatus;
 
 pub static GLOBAL_TASK_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
     let rocksdb = match init_task_runtime() {
@@ -51,10 +50,17 @@ pub static GLOBAL_TASK_STOP_MARK_MAP: Lazy<Arc<DashMap<String, Arc<AtomicBool>>>
         Arc::new(map)
     });
 
-pub static GLOBAL_LIVING_TASK_MAP: Lazy<Arc<DashMap<String, u64>>> = Lazy::new(|| {
-    let map = DashMap::<String, u64>::new();
-    Arc::new(map)
-});
+pub static GLOBAL_LIVING_TRANSFER_TASK_MAP: Lazy<Arc<DashMap<String, TransferTaskStatus>>> =
+    Lazy::new(|| {
+        let map = DashMap::<String, TransferTaskStatus>::new();
+        Arc::new(map)
+    });
+
+pub static GLOBAL_LIVING_COMPARE_TASK_MAP: Lazy<Arc<DashMap<String, TransferTaskStatus>>> =
+    Lazy::new(|| {
+        let map = DashMap::<String, TransferTaskStatus>::new();
+        Arc::new(map)
+    });
 
 pub static GLOBAL_LIST_FILE_POSITON_MAP: Lazy<Arc<DashMap<String, FilePosition>>> =
     Lazy::new(|| {
@@ -83,7 +89,7 @@ pub struct TasksStatusSaver {
 impl TasksStatusSaver {
     pub async fn snapshot_to_cf(&self) {
         loop {
-            for kv in GLOBAL_LIVING_TASK_MAP.iter() {
+            for kv in GLOBAL_LIVING_TRANSFER_TASK_MAP.iter() {
                 // 获取最小offset的FilePosition
                 let taskid = kv.key();
                 let mut checkpoint = match get_checkpoint(taskid) {
@@ -126,22 +132,28 @@ pub async fn init_tasks_status_server() {
     server.snapshot_to_cf().await;
 }
 
-pub fn register_living_task(task_id: &str) -> Result<Duration> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-    GLOBAL_LIVING_TASK_MAP.insert(task_id.to_string(), now.as_secs());
-
-    Ok(now)
+pub fn save_task_status(task_id: &str, task_status: TransferTaskStatus) {
+    GLOBAL_LIVING_TRANSFER_TASK_MAP.insert(task_id.to_string(), task_status);
 }
 
 pub fn log_out_living_task(task_id: &str) {
-    GLOBAL_LIVING_TASK_MAP.remove(task_id);
+    GLOBAL_LIVING_TRANSFER_TASK_MAP.remove(task_id);
 }
 
 pub fn task_is_living(task_id: &str) -> bool {
-    return match GLOBAL_LIVING_TASK_MAP.get(task_id) {
+    return match GLOBAL_LIVING_TRANSFER_TASK_MAP.get(task_id) {
         Some(_) => true,
         None => false,
     };
+}
+
+pub fn get_live_transfer_task_status(task_id: &str) -> Result<TransferTaskStatus> {
+    match GLOBAL_LIVING_TRANSFER_TASK_MAP.get(task_id) {
+        Some(kv) => Ok(kv.value().clone()),
+        None => {
+            return Err(anyhow!("task not living"));
+        }
+    }
 }
 
 pub fn get_exec_joinset(task_id: &str) -> Result<Arc<RwLock<JoinSet<()>>>> {
@@ -149,11 +161,16 @@ pub fn get_exec_joinset(task_id: &str) -> Result<Arc<RwLock<JoinSet<()>>>> {
         Some(s) => s,
         None => return Err(anyhow!("execute joinset not exist")),
     };
-
     let exec_set = kv.value().clone();
-
-    // .value()
-    // .clone();
-
     Ok(exec_set)
+}
+
+pub fn remove_exec_joinset(task_id: &str) {
+    GLOBAL_TASKS_EXEC_JOINSET.remove(task_id);
+    // let kv = match GLOBAL_TASKS_EXEC_JOINSET.get(task_id) {
+    //     Some(s) => s,
+    //     None => return Err(anyhow!("execute joinset not exist")),
+    // };
+    // let exec_set = kv.value().clone();
+    // Ok(exec_set)
 }
