@@ -20,7 +20,7 @@ use std::str::FromStr;
 use std::{env, fs, thread};
 use sysinfo::{Pid, RefreshKind, System};
 use tokio::net::TcpListener;
-use tokio::runtime::Runtime;
+use tokio::runtime::{self, Runtime};
 
 lazy_static! {
     static ref CLIAPP: clap::Command = clap::Command::new("serverframe-rs")
@@ -197,7 +197,13 @@ fn cmd_match(matches: &ArgMatches) {
         };
 
         let thread_http = thread::spawn(|| {
-            let rt = Runtime::new().unwrap();
+            // let rt = Runtime::new().unwrap();
+            let rt = runtime::Builder::new_multi_thread()
+                .worker_threads(num_cpus::get())
+                .enable_all()
+                .max_io_events_per_tick(32)
+                .build()
+                .unwrap();
             rt.block_on(async_http_server);
         });
 

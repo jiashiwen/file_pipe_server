@@ -1,10 +1,11 @@
 use super::{
-    CompareTask, TransferTask, TransferType, GLOBAL_LIVING_TRANSFER_TASK_MAP, GLOBAL_TASK_JOINSET,
-    GLOBAL_TASK_STOP_MARK_MAP,
+    CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_LIVING_TRANSFER_TASK_MAP,
+    GLOBAL_TASK_JOINSET, GLOBAL_TASK_STOP_MARK_MAP,
 };
 use crate::{
     commons::{
-        byte_size_str_to_usize, byte_size_usize_to_str, struct_to_json_string, LastModifyFilter,
+        byte_size_str_to_usize, byte_size_usize_to_str, json_to_struct, struct_to_json_string,
+        LastModifyFilter,
     },
     configure::get_config,
     resources::{CF_TASK, GLOBAL_ROCKSDB},
@@ -16,6 +17,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use aws_sdk_s3::types::ObjectIdentifier;
+use rocksdb::IteratorMode;
 use serde::{
     de::{self},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -83,7 +85,7 @@ pub enum TaskStopReason {
 }
 
 /// 任务类别，根据传输方式划分
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum TaskType {
     Transfer,
     TruncateBucket,
@@ -97,10 +99,34 @@ pub enum TaskType {
 pub enum Task {
     Transfer(TransferTask),
     Compare(CompareTask),
-    TruncateBucket(TaskTruncateBucket),
+    // TruncateBucket(TaskTruncateBucket),
 }
 
 impl Task {
+    pub fn task_type(&self) -> TaskType {
+        match self {
+            Task::Transfer(_) => TaskType::Transfer,
+            Task::Compare(_) => TaskType::Compare,
+            // Task::TruncateBucket(_) => todo!(),
+        }
+    }
+
+    pub fn task_source(&self) -> ObjectStorage {
+        match self {
+            Task::Transfer(t) => t.source.clone(),
+            Task::Compare(c) => c.target.clone(),
+            // Task::TruncateBucket(_) => todo!(),
+        }
+    }
+
+    pub fn task_target(&self) -> ObjectStorage {
+        match self {
+            Task::Transfer(t) => t.target.clone(),
+            Task::Compare(c) => c.target.clone(),
+            // Task::TruncateBucket(_) => todo!(),
+        }
+    }
+
     pub fn set_meta_dir(&mut self, meta_dir: &str) {
         match self {
             Task::Transfer(transfer) => {
@@ -108,9 +134,6 @@ impl Task {
             }
             Task::Compare(compare) => {
                 compare.attributes.meta_dir = meta_dir.to_string();
-            }
-            Task::TruncateBucket(truncate) => {
-                truncate.meta_dir = meta_dir.to_string();
             }
         }
     }
@@ -122,32 +145,51 @@ impl Task {
             Task::Compare(compare) => {
                 compare.task_id = task_id.to_string();
             }
-            Task::TruncateBucket(truncate) => {
-                truncate.task_id = task_id.to_string();
-            }
         }
     }
 
-    pub fn get_task_id(&self) -> String {
+    pub fn task_id(&self) -> String {
         return match self {
             Task::Transfer(transfer) => transfer.task_id.clone(),
             Task::Compare(compare) => compare.task_id.clone(),
-            Task::TruncateBucket(truncate) => truncate.task_id.clone(),
+            // Task::TruncateBucket(truncate) => truncate.task_id.clone(),
         };
+    }
+
+    pub fn already_created(&self) -> Result<bool> {
+        let mut created = false;
+        let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
+            Some(cf) => cf,
+            None => return Err(anyhow!("column family not exist")),
+        };
+        let cf_task_iter = GLOBAL_ROCKSDB.iterator_cf(&cf, IteratorMode::Start);
+
+        for item in cf_task_iter {
+            if let Ok(kv) = item {
+                let task_json_str = String::from_utf8(kv.1.to_vec())?;
+                let task = json_to_struct::<Task>(task_json_str.as_str())?;
+                if self.task_type().eq(&task.task_type()) {
+                    if self.task_source().eq(&task.task_source())
+                        && self.task_target().eq(&task.task_target())
+                    {
+                        created = true
+                    }
+                }
+            }
+        }
+        Ok(created)
     }
 
     pub fn stop(&self) -> Result<()> {
         return match self {
             Task::Transfer(_) => {
-                let kv = match GLOBAL_TASK_STOP_MARK_MAP.get(&self.get_task_id()) {
+                let kv = match GLOBAL_TASK_STOP_MARK_MAP.get(&self.task_id()) {
                     Some(kv) => kv,
                     None => {
-                        return Err(anyhow!("task {} stop mark not exist", self.get_task_id()));
+                        return Err(anyhow!("task {} stop mark not exist", self.task_id()));
                     }
                 };
-                let task_status = get_live_transfer_task_status(&self.get_task_id());
                 kv.value().store(true, std::sync::atomic::Ordering::SeqCst);
-                // GLOBAL_LIVING_TRANSFER_TASK_MAP.remove(&self.get_task_id());
                 Ok(())
             }
             _ => Err(anyhow!("task not transfer task")),
@@ -155,6 +197,9 @@ impl Task {
     }
 
     pub fn create(&mut self) -> Result<i64> {
+        if self.already_created()? {
+            return Err(anyhow!("task created"));
+        }
         let id = task_id_generator();
         let global_meta_dir = get_config()?.meta_dir;
         let meta_dir = gen_file_path(&global_meta_dir, id.to_string().as_str(), "");
@@ -201,17 +246,17 @@ impl Task {
                 }
                 remove_exec_joinset(&transfer.task_id);
             }
-            Task::TruncateBucket(truncate) => match truncate.exec_multi_threads() {
-                Ok(_) => {
-                    let log_info = LogInfo::<String> {
-                        task_id: truncate.task_id.clone(),
-                        msg: "execute ok!".to_string(),
-                        additional: None,
-                    };
-                    log::info!("{:?}", log_info)
-                }
-                Err(e) => log::error!("{:?}", e),
-            },
+            // Task::TruncateBucket(truncate) => match truncate.exec_multi_threads() {
+            //     Ok(_) => {
+            //         let log_info = LogInfo::<String> {
+            //             task_id: truncate.task_id.clone(),
+            //             msg: "execute ok!".to_string(),
+            //             additional: None,
+            //         };
+            //         log::info!("{:?}", log_info)
+            //     }
+            //     Err(e) => log::error!("{:?}", e),
+            // },
             Task::Compare(compare) => match compare.execute() {
                 Ok(_) => {
                     let log_info = LogInfo::<String> {

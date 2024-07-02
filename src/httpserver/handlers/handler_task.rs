@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::HandlerResult;
-use crate::tasks::TransferTaskStatus;
+use crate::tasks::{task_is_living, TransferTaskStatus};
 use crate::{
     httpserver::{
         exception::{AppError, AppErrorType},
@@ -144,6 +144,9 @@ pub async fn task_all_living() -> HandlerResult<HashMap<String, TransferTaskStat
     let mut map = HashMap::new();
     for item in GLOBAL_LIVING_TRANSFER_TASK_MAP.iter() {
         map.insert(item.key().to_string(), item.value().clone());
+        if task_is_living(item.key().as_str()) {
+            map.insert(item.key().to_string(), item.value().clone());
+        }
     }
     Ok(Json(Response::ok(map)))
 }

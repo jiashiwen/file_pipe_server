@@ -142,7 +142,10 @@ pub fn log_out_living_task(task_id: &str) {
 
 pub fn task_is_living(task_id: &str) -> bool {
     return match GLOBAL_LIVING_TRANSFER_TASK_MAP.get(task_id) {
-        Some(_) => true,
+        Some(ts) => match ts.status {
+            super::TransferTaskStatusType::Stopped(_) => false,
+            _ => true,
+        },
         None => false,
     };
 }

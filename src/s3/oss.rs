@@ -22,7 +22,7 @@ pub struct OssObjectsList {
     pub next_token: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct OSSDescription {
     pub provider: OssProvider,
     pub access_key_id: String,

@@ -151,7 +151,7 @@ impl TransferType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 #[serde(rename_all = "lowercase")]
 // #[serde(tag = "type")]
