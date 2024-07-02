@@ -152,7 +152,6 @@ impl Task {
         return match self {
             Task::Transfer(transfer) => transfer.task_id.clone(),
             Task::Compare(compare) => compare.task_id.clone(),
-            // Task::TruncateBucket(truncate) => truncate.task_id.clone(),
         };
     }
 
@@ -241,6 +240,17 @@ impl Task {
                         log::info!("{:?}", log_info)
                     }
                     Err(e) => {
+                        let mut transfer_task_status =
+                            match get_live_transfer_task_status(&transfer.task_id) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    log::error!("{}", e);
+                                    return;
+                                }
+                            };
+                        transfer_task_status.status =
+                            TransferTaskStatusType::Stopped(TaskStopReason::Broken);
+                        save_task_status(&transfer.task_id, transfer_task_status);
                         log::error!("{}", e);
                     }
                 }

@@ -845,6 +845,7 @@ impl TransferOss2OssRecordsExecutor {
             false => {
                 let e_t = Arc::clone(&executing_transfers);
                 multipart_transfer_obj_paralle_by_range(
+                    self.stop_mark.clone(),
                     source_oss.clone(),
                     &self.source.bucket,
                     record.key.as_str(),
@@ -1005,6 +1006,7 @@ impl TransferOss2OssRecordsExecutor {
                         let e_t = Arc::clone(&executing_transfers);
 
                         multipart_transfer_obj_paralle_by_range(
+                            self.stop_mark.clone(),
                             source_oss.clone(),
                             &self.source.bucket,
                             &record.source_key,

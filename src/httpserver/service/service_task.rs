@@ -1,19 +1,14 @@
-use core::task;
-use std::{collections::BTreeMap, fs};
-
 use crate::{
     commons::{json_to_struct, struct_to_json_string},
     configure::get_config,
     httpserver::module::RespListTask,
-    resources::{get_task, CF_TASK, GLOBAL_ROCKSDB},
-    tasks::{
-        gen_file_path, log_out_living_task, task_is_living, Task, GLOBAL_TASK_RUNTIME,
-        GLOBAL_TASK_STOP_MARK_MAP,
-    },
+    resources::{get_checkpoint, get_task, CF_TASK, GLOBAL_ROCKSDB},
+    tasks::{gen_file_path, task_is_living, CheckPoint, Task, GLOBAL_TASK_RUNTIME},
 };
 use anyhow::anyhow;
 use anyhow::Result;
 use rocksdb::IteratorMode;
+use std::{collections::BTreeMap, fs};
 
 pub fn service_task_create(task: &mut Task) -> Result<i64> {
     task.create()
@@ -105,6 +100,10 @@ pub fn service_show_task(task_id: &str) -> Result<Task> {
         }
         None => Err(anyhow!("task {} not exist", task_id)),
     };
+}
+
+pub fn service_task_checkpoint(task_id: &str) -> Result<CheckPoint> {
+    get_checkpoint(task_id)
 }
 
 pub fn service_list_all_tasks() -> Result<Vec<RespListTask>> {

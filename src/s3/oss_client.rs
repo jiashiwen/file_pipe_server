@@ -944,6 +944,7 @@ impl OssClient {
 }
 
 pub async fn multipart_transfer_obj_paralle_by_range(
+    stop_mark: Arc<AtomicBool>,
     s_client: Arc<OssClient>,
     s_bucket: &str,
     s_key: &str,
@@ -972,6 +973,7 @@ pub async fn multipart_transfer_obj_paralle_by_range(
     }
 
     let completed_parts = transfer_object_parts_by_range(
+        stop_mark,
         s_client,
         s_bucket,
         s_key,
@@ -994,6 +996,7 @@ pub async fn multipart_transfer_obj_paralle_by_range(
 }
 
 pub async fn transfer_object_parts_by_range(
+    stop_mark: Arc<AtomicBool>,
     s_client: Arc<OssClient>,
     s_bucket: &str,
     s_key: &str,
@@ -1024,6 +1027,10 @@ pub async fn transfer_object_parts_by_range(
     let vec_obj_range_len = vec_obj_range.len();
 
     for range in vec_obj_range {
+        if stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(anyhow!("task stopped"));
+        }
+
         let part_num = range.part_num;
         vec_obj_range_tmp.push(range);
         if vec_obj_range_tmp.len().eq(&multi_part_chunks_per_batch)
@@ -1033,6 +1040,7 @@ pub async fn transfer_object_parts_by_range(
                 task::yield_now().await;
             }
 
+            let s_m = stop_mark.clone();
             let e_t = Arc::clone(&executing_transfers);
             let s_c = Arc::clone(&s_client);
             let t_c = t_client.clone();
@@ -1051,7 +1059,7 @@ pub async fn transfer_object_parts_by_range(
                     *num += 1;
                 }
                 if let Err(e) = transfer_parts_batch_by_range(
-                    s_c, t_c, &s_b, &t_b, &s_k, &t_k, &up_id, v_o_r, c_b_t,
+                    s_m, s_c, t_c, &s_b, &t_b, &s_k, &t_k, &up_id, v_o_r, c_b_t,
                 )
                 .await
                 {
@@ -1088,6 +1096,7 @@ pub async fn transfer_object_parts_by_range(
 }
 
 pub async fn transfer_parts_batch_by_range(
+    stop_mark: Arc<AtomicBool>,
     s_client: Arc<OssClient>,
     t_client: Arc<OssClient>,
     s_bucket: &str,
@@ -1099,6 +1108,9 @@ pub async fn transfer_parts_batch_by_range(
     completed_parts_btree: Arc<Mutex<BTreeMap<i32, CompletedPart>>>,
 ) -> Result<()> {
     for p in parts_vec {
+        if stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(anyhow!("task stopped"));
+        }
         let range_str = gen_range_string(p.begin, p.end);
         let s_obj = s_client
             .client

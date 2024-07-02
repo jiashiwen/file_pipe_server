@@ -313,8 +313,8 @@ impl TransferTask {
         // 执行过程中错误数统计
         let err_counter = Arc::new(AtomicUsize::new(0));
         // 任务停止标准，用于通知所有协程任务结束
-        let snapshot_stop_mark = Arc::new(AtomicBool::new(false));
-        GLOBAL_TASK_STOP_MARK_MAP.insert(self.task_id.clone(), snapshot_stop_mark.clone());
+        let stop_mark = Arc::new(AtomicBool::new(false));
+        GLOBAL_TASK_STOP_MARK_MAP.insert(self.task_id.clone(), stop_mark.clone());
 
         let offset_map = Arc::new(DashMap::<String, FilePosition>::new());
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
@@ -505,7 +505,7 @@ impl TransferTask {
                             task_exec_set.clone(),
                             Arc::clone(&executing_transfers),
                             vk,
-                            Arc::clone(&snapshot_stop_mark),
+                            Arc::clone(&stop_mark),
                             Arc::clone(&err_counter),
                             Arc::clone(&offset_map),
                             executed_file.path.clone(),
@@ -532,7 +532,7 @@ impl TransferTask {
                         task_exec_set.clone(),
                         Arc::clone(&executing_transfers),
                         vk,
-                        Arc::clone(&snapshot_stop_mark),
+                        Arc::clone(&stop_mark),
                         Arc::clone(&err_counter),
                         Arc::clone(&offset_map),
                         executed_file.path.clone(),
@@ -559,12 +559,12 @@ impl TransferTask {
 
                 // 启动进度条线程
                 let map = Arc::clone(&offset_map);
-                let stop_mark = Arc::clone(&snapshot_stop_mark);
+                let s_m = Arc::clone(&stop_mark);
                 let total = executed_file.total_lines;
                 let id = self.task_id.clone();
                 sys_set.write().await.spawn(async move {
                     // Todo 调整进度条
-                    quantify_processbar(id, total, stop_mark, map, OFFSET_PREFIX).await;
+                    quantify_processbar(id, total, s_m, map, OFFSET_PREFIX).await;
                 });
 
                 let task_stock = self.gen_transfer_actions();
@@ -607,7 +607,7 @@ impl TransferTask {
                             && err_counter.load(std::sync::atomic::Ordering::SeqCst)
                                 < self.attributes.max_errors
                     {
-                        if snapshot_stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
+                        if stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
                             match err_counter
                                 .load(std::sync::atomic::Ordering::SeqCst)
                                 .ge(&self.attributes.max_errors)
@@ -628,7 +628,7 @@ impl TransferTask {
                                 task_exec_set.clone(),
                                 Arc::clone(&executing_transfers),
                                 vk,
-                                Arc::clone(&snapshot_stop_mark),
+                                Arc::clone(&stop_mark),
                                 Arc::clone(&err_counter),
                                 Arc::clone(&offset_map),
                                 executed_file.path.clone(),
@@ -648,6 +648,16 @@ impl TransferTask {
 
         // 配置停止 offset save 标识为 true
         // snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
+
+        if stop_mark.load(std::sync::atomic::Ordering::Relaxed) {
+            match err_counter
+                .load(std::sync::atomic::Ordering::Relaxed)
+                .ge(&self.attributes.max_errors)
+            {
+                true => return Err(anyhow!("too many errors")),
+                false => return Ok(()),
+            }
+        }
 
         let modify_checkpoint_timestamp =
             i128::from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs());
@@ -680,9 +690,7 @@ impl TransferTask {
         drop(lock);
 
         // 增量逻辑
-        if task_is_living(&self.task_id)
-            && !snapshot_stop_mark.load(std::sync::atomic::Ordering::Relaxed)
-        {
+        if task_is_living(&self.task_id) && !stop_mark.load(std::sync::atomic::Ordering::Relaxed) {
             let executing_transfers = Arc::new(RwLock::new(0));
             let task_increment = self.gen_transfer_actions();
 
@@ -694,11 +702,11 @@ impl TransferTask {
                     Arc::clone(&increment_assistant),
                     Arc::clone(&err_counter),
                     Arc::clone(&offset_map),
-                    snapshot_stop_mark.clone(),
+                    stop_mark.clone(),
                 )
                 .await;
             // 配置停止 offset save 标识为 true
-            snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
+            stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
         Ok(())

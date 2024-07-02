@@ -1,7 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::HandlerResult;
-use crate::tasks::{task_is_living, TransferTaskStatus};
+use crate::httpserver::service::service_task::service_task_checkpoint;
+use crate::tasks::{task_is_living, CheckPoint, TransferTaskStatus};
 use crate::{
     httpserver::{
         exception::{AppError, AppErrorType},
@@ -109,8 +110,18 @@ pub async fn task_stop(Json(id): Json<ReqTaskId>) -> HandlerResult<Value> {
     }
 }
 
-pub async fn task_status() -> HandlerResult<Value> {
-    Ok(Json(Response::ok(json!({"status":"ok"}))))
+pub async fn task_status(Json(id): Json<ReqTaskId>) -> HandlerResult<CheckPoint> {
+    match service_task_checkpoint(&id.task_id) {
+        Ok(c) => Ok(Json(Response::ok(c))),
+        Err(e) => {
+            let err = AppError {
+                message: Some(e.to_string()),
+                cause: None,
+                error_type: AppErrorType::UnknowErr,
+            };
+            return Err(err);
+        }
+    }
 }
 
 pub async fn task_show(Json(id): Json<ReqTaskId>) -> HandlerResult<Task> {
