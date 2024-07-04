@@ -1,6 +1,6 @@
 use super::{
-    CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_TASK_JOINSET,
-    GLOBAL_TASK_STOP_MARK_MAP,
+    CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_LIST_FILE_POSITON_MAP,
+    GLOBAL_TASKS_EXEC_JOINSET, GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_STOP_MARK_MAP,
 };
 use crate::{
     commons::{
@@ -8,12 +8,12 @@ use crate::{
         LastModifyFilter,
     },
     configure::get_config,
-    resources::{CF_TASK, GLOBAL_ROCKSDB},
-    s3::OSSDescription,
-    tasks::{
-        get_live_transfer_task_status, remove_exec_joinset, save_task_status, LogInfo,
-        TransferTaskStatusType,
+    resources::{
+        get_task_status, remove_checkpoint_from_cf, remove_task_status_from_cf,
+        save_task_status_to_cf, task_is_living, CF_TASK, GLOBAL_ROCKSDB,
     },
+    s3::OSSDescription,
+    tasks::{remove_exec_joinset, LogInfo, Status, TransferStatus},
 };
 use anyhow::{anyhow, Result};
 use aws_sdk_s3::types::ObjectIdentifier;
@@ -23,16 +23,15 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use snowflake::SnowflakeIdGenerator;
-use std::time::Duration;
 use std::{
     fs::{self, File},
     io::{self, BufRead},
 };
-use tokio::{runtime, task::JoinSet, time::sleep};
+use tokio::{runtime, task::JoinSet};
 
 pub const TRANSFER_OBJECT_LIST_FILE_PREFIX: &'static str = "transfer_objects_list_";
 pub const COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX: &'static str = "compare_source_list_";
-pub const TRANSFER_CHECK_POINT_FILE: &'static str = "checkpoint_transfer.yml";
+// pub const TRANSFER_CHECK_POINT_FILE: &'static str = "checkpoint_transfer.yml";
 pub const COMPARE_CHECK_POINT_FILE: &'static str = "checkpoint_compare.yml";
 pub const TRANSFER_ERROR_RECORD_PREFIX: &'static str = "transfer_error_record_";
 pub const COMPARE_ERROR_RECORD_PREFIX: &'static str = "compare_error_record_";
@@ -41,27 +40,6 @@ pub const OFFSET_PREFIX: &'static str = "offset_";
 pub const NOTIFY_FILE_PREFIX: &'static str = "notify_";
 pub const REMOVED_PREFIX: &'static str = "removed_";
 pub const MODIFIED_PREFIX: &'static str = "modified_";
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub struct TestGlobalJoinsetTask {
-    pub task_id: String,
-    pub loop_size: usize,
-}
-
-impl TestGlobalJoinsetTask {
-    pub async fn run(&self, loop_size: usize) {
-        while GLOBAL_TASK_JOINSET.read().await.len() > 2 {
-            let mut global_set = GLOBAL_TASK_JOINSET.write().await;
-            global_set.join_next().await;
-        }
-        for i in 0..loop_size {
-            println!("{}", i);
-            log::info!("id:{},{}", self.task_id, i);
-            sleep(Duration::from_secs(1)).await;
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct AnalyzedResult {
@@ -107,7 +85,13 @@ impl Task {
         match self {
             Task::Transfer(_) => TaskType::Transfer,
             Task::Compare(_) => TaskType::Compare,
-            // Task::TruncateBucket(_) => todo!(),
+        }
+    }
+
+    pub fn meta_dir(&self) -> String {
+        match self {
+            Task::Transfer(t) => t.attributes.meta_dir.clone(),
+            Task::Compare(c) => c.attributes.meta_dir.clone(),
         }
     }
 
@@ -115,7 +99,6 @@ impl Task {
         match self {
             Task::Transfer(t) => t.source.clone(),
             Task::Compare(c) => c.target.clone(),
-            // Task::TruncateBucket(_) => todo!(),
         }
     }
 
@@ -123,7 +106,6 @@ impl Task {
         match self {
             Task::Transfer(t) => t.target.clone(),
             Task::Compare(c) => c.target.clone(),
-            // Task::TruncateBucket(_) => todo!(),
         }
     }
 
@@ -153,6 +135,35 @@ impl Task {
             Task::Transfer(transfer) => transfer.task_id.clone(),
             Task::Compare(compare) => compare.task_id.clone(),
         };
+    }
+
+    // 清理任务运行状态，包括stop_mark,task_status,stok期间文件offset记录信息等
+    pub fn clean(&self) -> Result<()> {
+        let task_id = self.task_id();
+        if task_is_living(&task_id) {
+            return Err(anyhow!("task is living"));
+        }
+
+        // 清理 stock 传输列表文件offset记录
+        for item in GLOBAL_LIST_FILE_POSITON_MAP.iter() {
+            let key = item.key();
+            if key.starts_with(&task_id) {
+                GLOBAL_LIST_FILE_POSITON_MAP.remove(key);
+            }
+        }
+        // 清理 execute joinset
+        remove_exec_joinset(&task_id);
+        // 清理 sys joinset
+        GLOBAL_TASKS_SYS_JOINSET.remove(&task_id);
+        // 清理stop mark
+        GLOBAL_TASK_STOP_MARK_MAP.remove(&task_id);
+        // 清理任务状态 task status
+        remove_task_status_from_cf(&task_id)?;
+        // 清理任务checkpoint
+        remove_checkpoint_from_cf(&task_id)?;
+        // 清理meta dir
+        fs::remove_dir(self.meta_dir())?;
+        Ok(())
     }
 
     pub fn already_created(&self) -> Result<bool> {
@@ -185,6 +196,7 @@ impl Task {
                 let kv = match GLOBAL_TASK_STOP_MARK_MAP.get(&self.task_id()) {
                     Some(kv) => kv,
                     None => {
+                        let _ = remove_task_status_from_cf(&self.task_id());
                         return Err(anyhow!("task {} stop mark not exist", self.task_id()));
                     }
                 };
@@ -221,20 +233,19 @@ impl Task {
             // 重构task status，使用cf记录
             // 主动停止任务时更新任务为停止状态，执行完成时不更新任务状态
             Task::Transfer(transfer) => {
-                match transfer.execute().await {
+                let exec_result = transfer.execute().await;
+                let mut task_status = match get_task_status(&transfer.task_id) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("{}", e);
+                        return;
+                    }
+                };
+                match exec_result {
                     Ok(_) => {
                         //Todo 增加清理逻辑，清理joinset，标志等等
-                        let mut transfer_task_status =
-                            match get_live_transfer_task_status(&transfer.task_id) {
-                                Ok(s) => s,
-                                Err(e) => {
-                                    log::error!("{}", e);
-                                    return;
-                                }
-                            };
-                        transfer_task_status.status =
-                            TransferTaskStatusType::Stopped(TaskStopReason::Finish);
-                        save_task_status(&transfer.task_id, transfer_task_status);
+                        task_status.status =
+                            Status::Transfer(TransferStatus::Stopped(TaskStopReason::Finish));
                         let log_info = LogInfo::<String> {
                             task_id: transfer.task_id.clone(),
                             msg: "execute ok!".to_string(),
@@ -243,20 +254,15 @@ impl Task {
                         log::info!("{:?}", log_info)
                     }
                     Err(e) => {
-                        let mut transfer_task_status =
-                            match get_live_transfer_task_status(&transfer.task_id) {
-                                Ok(s) => s,
-                                Err(e) => {
-                                    log::error!("{}", e);
-                                    return;
-                                }
-                            };
-                        transfer_task_status.status =
-                            TransferTaskStatusType::Stopped(TaskStopReason::Broken);
-                        save_task_status(&transfer.task_id, transfer_task_status);
+                        task_status.status =
+                            Status::Transfer(TransferStatus::Stopped(TaskStopReason::Broken));
                         log::error!("{}", e);
                     }
                 }
+
+                if let Err(e) = save_task_status_to_cf(&mut task_status) {
+                    log::error!("{:?}", e);
+                };
                 remove_exec_joinset(&transfer.task_id);
             }
 
@@ -501,6 +507,31 @@ impl TaskTruncateBucket {
     }
 }
 
+pub fn clean_task(task_id: &str) -> Result<()> {
+    if task_is_living(&task_id) {
+        return Err(anyhow!("task is living"));
+    }
+    // 清理 stock 传输列表文件offset记录
+    for item in GLOBAL_LIST_FILE_POSITON_MAP.iter() {
+        let key = item.key();
+        if key.starts_with(&task_id) {
+            GLOBAL_LIST_FILE_POSITON_MAP.remove(key);
+        }
+    }
+    // 清理 execute joinset
+    remove_exec_joinset(&task_id);
+    // 清理 sys joinset
+    GLOBAL_TASKS_SYS_JOINSET.remove(task_id);
+    // 清理stop mark
+    GLOBAL_TASK_STOP_MARK_MAP.remove(task_id);
+    // 清理任务状态 task status
+    remove_task_status_from_cf(&task_id)?;
+    // 清理任务checkpoint
+    remove_checkpoint_from_cf(&task_id)?;
+    // Todo 清理meta dir,遍历current_config 中的meta_dir 目录，删除名为task_id 的子目录
+    // fs::remove_dir(self.meta_dir())?;
+    Ok(())
+}
 pub fn task_id_generator() -> i64 {
     let mut id_generator_generator = SnowflakeIdGenerator::new(1, 1);
     let id = id_generator_generator.real_time_generate();

@@ -2,32 +2,38 @@ use crate::{
     commons::{json_to_struct, struct_to_json_string},
     configure::get_config,
     httpserver::module::RespListTask,
-    resources::{get_checkpoint, get_task, CF_TASK, GLOBAL_ROCKSDB},
-    tasks::{gen_file_path, task_is_living, CheckPoint, Task, GLOBAL_TASK_RUNTIME},
+    resources::{
+        get_checkpoint, get_task, remove_task_from_cf, task_is_living, CF_TASK, GLOBAL_ROCKSDB,
+    },
+    tasks::{clean_task, gen_file_path, CheckPoint, Task, GLOBAL_TASK_RUNTIME},
 };
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::{anyhow, Context};
 use rocksdb::IteratorMode;
-use std::{collections::BTreeMap, fs};
+use std::collections::BTreeMap;
 
 pub fn service_task_create(task: &mut Task) -> Result<i64> {
     task.create()
 }
 
-pub fn service_remove_task(task_ids: Vec<String>) -> Result<()> {
-    let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
-        Some(cf) => cf,
-        None => return Err(anyhow!("column family not exist")),
-    };
-
+pub fn service_remove_tasks(task_ids: Vec<String>) -> Result<()> {
     for id in task_ids {
-        let global_meta_dir = get_config()?.meta_dir;
-        let meta_dir = gen_file_path(&global_meta_dir, id.as_str(), "");
-        GLOBAL_ROCKSDB.delete_cf(&cf, id)?;
-        fs::remove_dir(meta_dir)?
+        service_remove_task(&id).context(format!("{}:{}", file!(), line!()))?;
     }
-
     Ok(())
+}
+
+pub fn service_remove_task(task_id: &str) -> Result<()> {
+    let task = match get_task(task_id)? {
+        Some(t) => t,
+        None => return Ok(()),
+    };
+    task.clean()?;
+    remove_task_from_cf(task_id)
+}
+
+pub fn service_clean_task(task_id: &str) -> Result<()> {
+    clean_task(task_id)
 }
 
 pub fn service_update_task(task_id: &str, task: &mut Task) -> Result<()> {
@@ -45,10 +51,14 @@ pub fn service_update_task(task_id: &str, task: &mut Task) -> Result<()> {
 }
 
 pub fn service_start_task(task_id: &str) -> Result<()> {
-    let task = get_task(task_id)?;
     if task_is_living(task_id) {
         return Err(anyhow!("task {} is living", task_id));
     }
+    let task = match get_task(task_id)? {
+        Some(t) => t,
+        None => return Err(anyhow!("task not exist")),
+    };
+
     GLOBAL_TASK_RUNTIME.spawn(async move { task.execute().await });
     // 检查任务生存状态
     Ok(())
@@ -58,20 +68,11 @@ pub fn service_stop_task(task_id: &str) -> Result<()> {
     if !task_is_living(task_id) {
         return Err(anyhow!("task not living"));
     }
-    let task = get_task(task_id)?;
+    let task = match get_task(task_id)? {
+        Some(t) => t,
+        None => return Err(anyhow!("task not exist")),
+    };
     task.stop()
-    // return match task_is_living(task_id) {
-    //     true => match GLOBAL_TASK_STOP_MARK_MAP.get_mut(task_id) {
-    //         Some(mask) => {
-    //             mask.value()
-    //                 .store(true, std::sync::atomic::Ordering::SeqCst);
-    //             log_out_living_task(task_id);
-    //             Ok(())
-    //         }
-    //         None => Err(anyhow!("task stop mask not exist")),
-    //     },
-    //     false => Ok(()),
-    // };
 }
 
 pub async fn service_analyze_task(task_id: &str) -> Result<BTreeMap<String, i128>> {

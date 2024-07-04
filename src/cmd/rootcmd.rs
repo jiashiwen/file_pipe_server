@@ -6,7 +6,8 @@ use crate::configure::{get_config, get_config_file_path, get_current_config_yml,
 use crate::httpserver;
 use crate::resources::init_resources;
 use crate::tasks::{
-    init_tasks_status_server, GLOBAL_TASK_JOINSET, GLOBAL_TASK_RUNTIME, GLOBAL_TASK_STOP_MARK_MAP,
+    init_tasks_status_server, GLOBAL_TASKS_EXEC_JOINSET, GLOBAL_TASK_RUNTIME,
+    GLOBAL_TASK_STOP_MARK_MAP,
 };
 use clap::{Arg, ArgAction, ArgMatches};
 use fork::{daemon, Fork};
@@ -17,8 +18,6 @@ use signal_hook::iterator::SignalsInfo;
 use std::net::{self, IpAddr};
 use std::process::{exit, Command};
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 use std::{env, fs, thread};
 use sysinfo::{Pid, RefreshKind, System};
 use tokio::net::TcpListener;
@@ -156,8 +155,8 @@ fn cmd_match(matches: &ArgMatches) {
         GLOBAL_TASK_RUNTIME.block_on(async {
             log::info!("global runtime start!");
             log::info!(
-                "global task joinset is empty:{}",
-                GLOBAL_TASK_JOINSET.read().await.is_empty()
+                "GLOBAL_TASKS_EXEC_JOINSET len:{}",
+                GLOBAL_TASKS_EXEC_JOINSET.len()
             );
         });
 

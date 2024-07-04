@@ -1,7 +1,6 @@
 use super::{
     gen_file_path, task_actions::TransferTaskActions, IncrementAssistant, TransferStage,
-    TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
-    TRANSFER_ERROR_RECORD_PREFIX,
+    TransferTaskAttributes, MODIFIED_PREFIX, REMOVED_PREFIX, TRANSFER_ERROR_RECORD_PREFIX,
 };
 use crate::{
     commons::{

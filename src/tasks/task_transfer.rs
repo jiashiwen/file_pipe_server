@@ -13,9 +13,11 @@ use super::{
 use crate::commons::quantify_processbar;
 use crate::commons::{json_to_struct, LastModifyFilter};
 use crate::resources::get_checkpoint;
-use crate::tasks::log_out_living_task;
-use crate::tasks::save_task_status;
-use crate::tasks::task_is_living;
+use crate::resources::get_task_status;
+use crate::resources::save_task_status_to_cf;
+use crate::tasks::Status;
+use crate::tasks::TaskStatus;
+use crate::tasks::TransferStatus;
 use crate::tasks::GLOBAL_TASKS_EXEC_JOINSET;
 use crate::tasks::GLOBAL_TASKS_SYS_JOINSET;
 use crate::tasks::GLOBAL_TASK_STOP_MARK_MAP;
@@ -318,13 +320,15 @@ impl TransferTask {
 
         let offset_map = Arc::new(DashMap::<String, FilePosition>::new());
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+
         //注册活动任务
-        let task_status = TransferTaskStatus {
+        let task_status = &mut TaskStatus {
             task_id: self.task_id.clone(),
             start_time: now.as_secs(),
-            status: TransferTaskStatusType::Starting,
+            status: Status::Transfer(TransferStatus::Starting),
         };
-        save_task_status(&self.task_id, task_status);
+        let _ = save_task_status_to_cf(task_status)?;
+        // save_task_status(&self.task_id, task_status);
 
         let mut executed_file = FileDescription {
             path: gen_file_path(
@@ -412,20 +416,18 @@ impl TransferTask {
         log::info!("{:?}", log_info);
 
         //注册任务状态为stock
-        let task_status = TransferTaskStatus {
+        let mut task_status = &mut TaskStatus {
             task_id: self.task_id.clone(),
             start_time: now.as_secs(),
-            status: TransferTaskStatusType::Running(TransferStage::Stock),
+            status: Status::Transfer(TransferStatus::Running(TransferStage::Stock)),
         };
-        save_task_status(&self.task_id, task_status);
+        save_task_status_to_cf(&mut task_status)?;
 
+        // sys_set 用于执行checkpoint、notify等辅助任务
         let sys_set = Arc::new(RwLock::new(JoinSet::<()>::new()));
         GLOBAL_TASKS_SYS_JOINSET.insert(self.task_id.clone(), sys_set.clone());
 
-        // sys_set 用于执行checkpoint、notify等辅助任务
-        // let mut sys_set = JoinSet::new();
         // execut_set 用于执行任务
-        // let mut execut_set = JoinSet::new();
         let task_exec_set = Arc::new(RwLock::new(JoinSet::<()>::new()));
         GLOBAL_TASKS_EXEC_JOINSET.insert(self.task_id.clone(), task_exec_set.clone());
         // 正在执行的任务数量，用于控制分片上传并行度
@@ -557,6 +559,11 @@ impl TransferTask {
                 };
                 checkpoint.save_to_rocksdb_cf()?;
 
+                //变更任务状态为stock阶段
+                task_status.status =
+                    Status::Transfer(TransferStatus::Running(TransferStage::Stock));
+                let _ = save_task_status_to_cf(task_status)?;
+
                 // 启动进度条线程
                 let map = Arc::clone(&offset_map);
                 let s_m = Arc::clone(&stop_mark);
@@ -670,11 +677,18 @@ impl TransferTask {
             modify_checkpoint_timestamp,
             task_begin_timestamp: i128::from(now.as_secs()),
         };
+
         if self.attributes.transfer_type.is_stock() {
+            //变更任务状态为 finish
+            task_status.status = Status::Transfer(TransferStatus::Stopped(TaskStopReason::Finish));
+            let _ = save_task_status_to_cf(task_status)?;
             checkpoint.save_to_rocksdb_cf()?;
-            log_out_living_task(&self.task_id);
             return Ok(());
         } else {
+            //变更任务状态为 Increment
+            task_status.status =
+                Status::Transfer(TransferStatus::Running(TransferStage::Increment));
+            let _ = save_task_status_to_cf(task_status)?;
             checkpoint.task_stage = TransferStage::Increment;
             checkpoint.save_to_rocksdb_cf()?;
         }
@@ -689,7 +703,11 @@ impl TransferTask {
         drop(lock);
 
         // 增量逻辑
-        if task_is_living(&self.task_id) && !stop_mark.load(std::sync::atomic::Ordering::Relaxed) {
+        // Todo 废弃task_is_living，使用新的状态属性
+        let task_status = get_task_status(&self.task_id)?;
+        if task_status.is_running_increment()
+            && !stop_mark.load(std::sync::atomic::Ordering::Relaxed)
+        {
             let executing_transfers = Arc::new(RwLock::new(0));
             let task_increment = self.gen_transfer_actions();
 

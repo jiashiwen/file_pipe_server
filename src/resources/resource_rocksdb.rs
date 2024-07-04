@@ -1,4 +1,5 @@
 use crate::commons::json_to_struct;
+use crate::commons::struct_to_json_string;
 use crate::tasks::CheckPoint;
 use crate::tasks::Task;
 use crate::tasks::TaskStatus;
@@ -66,11 +67,29 @@ pub fn get_checkpoint(task_id: &str) -> Result<CheckPoint> {
         None => return Err(anyhow!("checkpoint not exist")),
     };
     let checkpoint: CheckPoint = bincode::deserialize(&chekpoint_bytes)?;
-
     Ok(checkpoint)
 }
 
-pub fn get_task(task_id: &str) -> Result<Task> {
+pub fn remove_checkpoint_from_cf(task_id: &str) -> Result<()> {
+    let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK_CHECKPOINTS) {
+        Some(cf) => cf,
+        None => return Err(anyhow!("column family not exist")),
+    };
+    GLOBAL_ROCKSDB.delete_cf(&cf, task_id.as_bytes())?;
+    Ok(())
+}
+
+pub fn save_task_to_cf(task: Task) -> Result<()> {
+    let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
+        Some(cf) => cf,
+        None => return Err(anyhow!("column family not exist")),
+    };
+    let task_json = struct_to_json_string(&task)?;
+    GLOBAL_ROCKSDB.put_cf(&cf, task.task_id().as_bytes(), task_json.as_bytes())?;
+    Ok(())
+}
+
+pub fn get_task(task_id: &str) -> Result<Option<Task>> {
     let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
         Some(cf) => cf,
         None => return Err(anyhow!("column family not exist")),
@@ -81,10 +100,19 @@ pub fn get_task(task_id: &str) -> Result<Task> {
         Some(v) => {
             let task_json_str = String::from_utf8(v)?;
             let task = json_to_struct::<Task>(task_json_str.as_str())?;
-            Ok(task)
+            Ok(Some(task))
         }
-        None => Err(anyhow!("task {} not exist", task_id)),
+        None => Ok(None),
     };
+}
+
+pub fn remove_task_from_cf(task_id: &str) -> Result<()> {
+    let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK) {
+        Some(cf) => cf,
+        None => return Err(anyhow!("column family not exist")),
+    };
+    GLOBAL_ROCKSDB.delete_cf(&cf, task_id.as_bytes())?;
+    Ok(())
 }
 
 pub fn get_task_status(task_id: &str) -> Result<TaskStatus> {
@@ -94,14 +122,14 @@ pub fn get_task_status(task_id: &str) -> Result<TaskStatus> {
     };
     let status_bytes = match GLOBAL_ROCKSDB.get_cf(&cf, task_id)? {
         Some(b) => b,
-        None => return Err(anyhow!("checkpoint not exist")),
+        None => return Err(anyhow!("task status not exist")),
     };
     let status = bincode::deserialize(&status_bytes)?;
 
     Ok(status)
 }
 
-pub fn save_task_status(status: &mut TaskStatus) -> Result<()> {
+pub fn save_task_status_to_cf(status: &mut TaskStatus) -> Result<()> {
     if status.is_starting() {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         status.start_time = now.as_secs();
@@ -113,6 +141,15 @@ pub fn save_task_status(status: &mut TaskStatus) -> Result<()> {
     };
     let encoded: Vec<u8> = bincode::serialize(status)?;
     GLOBAL_ROCKSDB.put_cf(&cf, status.task_id.as_bytes(), encoded)?;
+    Ok(())
+}
+
+pub fn remove_task_status_from_cf(task_id: &str) -> Result<()> {
+    let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK_STATUS) {
+        Some(cf) => cf,
+        None => return Err(anyhow!("column family not exist")),
+    };
+    GLOBAL_ROCKSDB.delete_cf(&cf, task_id.as_bytes())?;
     Ok(())
 }
 
@@ -131,4 +168,14 @@ pub fn living_tasks() -> Result<Vec<TaskStatus>> {
         }
     }
     Ok(vec_task_status)
+}
+
+pub fn task_is_living(task_id: &str) -> bool {
+    return match get_task_status(task_id) {
+        Ok(s) => match s.is_stopped() {
+            true => false,
+            false => true,
+        },
+        Err(_) => false,
+    };
 }

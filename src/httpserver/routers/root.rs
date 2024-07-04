@@ -1,8 +1,8 @@
 use crate::httpserver::handlers::{
     current_config, rbatis_t_insert, redis_put, root, task_all, task_all_living, task_analyze,
-    task_create, task_remove, task_show, task_start, task_status, task_stop,
+    task_checkpoint, task_clean, task_create, task_show, task_start, task_stop,
     task_template_transfer_local2local, task_template_transfer_local2oss,
-    task_template_transfer_oss2local, task_template_transfer_oss2oss, task_update,
+    task_template_transfer_oss2local, task_template_transfer_oss2oss, task_update, tasks_remove,
 };
 
 use axum::error_handling::HandleErrorLayer;
@@ -41,10 +41,11 @@ pub fn router_root() -> Router {
     let task_router = Router::new()
         .route("/create", post(task_create))
         .route("/update", post(task_update))
-        .route("/remove", post(task_remove))
+        .route("/remove", post(tasks_remove))
+        .route("/clean", post(task_clean))
         .route("/start", post(task_start))
         .route("/stop", post(task_stop))
-        .route("/status", post(task_status))
+        .route("/checkpoint", post(task_checkpoint))
         .route("/show", post(task_show))
         .route("/analyze", post(task_analyze))
         .route("/all", post(task_all))

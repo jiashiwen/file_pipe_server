@@ -1,13 +1,13 @@
 use super::HandlerResult;
-use crate::httpserver::service::service_task::service_task_checkpoint;
+use crate::httpserver::service::service_task::{service_clean_task, service_task_checkpoint};
 use crate::resources::living_tasks;
-use crate::tasks::{CheckPoint, TaskStatus};
+use crate::tasks::{clean_task, CheckPoint, TaskStatus};
 use crate::{
     httpserver::{
         exception::{AppError, AppErrorType},
         module::{ReqTaskId, ReqTaskIds, ReqTaskUpdate, RespListTask, Response},
         service::service_task::{
-            service_analyze_task, service_list_all_tasks, service_remove_task, service_show_task,
+            service_analyze_task, service_list_all_tasks, service_remove_tasks, service_show_task,
             service_start_task, service_stop_task, service_task_create, service_update_task,
         },
     },
@@ -45,8 +45,22 @@ pub async fn task_update(Json(mut update): Json<ReqTaskUpdate>) -> HandlerResult
     }
 }
 
-pub async fn task_remove(Json(ids): Json<ReqTaskIds>) -> HandlerResult<()> {
-    match service_remove_task(ids.task_ids) {
+pub async fn tasks_remove(Json(ids): Json<ReqTaskIds>) -> HandlerResult<()> {
+    match service_remove_tasks(ids.task_ids) {
+        Ok(_) => Ok(Json(Response::ok(()))),
+        Err(e) => {
+            let err = AppError {
+                message: Some(e.to_string()),
+                cause: None,
+                error_type: AppErrorType::UnknowErr,
+            };
+            return Err(err);
+        }
+    }
+}
+
+pub async fn task_clean(Json(id): Json<ReqTaskId>) -> HandlerResult<()> {
+    match service_clean_task(&id.task_id) {
         Ok(_) => Ok(Json(Response::ok(()))),
         Err(e) => {
             let err = AppError {
@@ -110,7 +124,7 @@ pub async fn task_stop(Json(id): Json<ReqTaskId>) -> HandlerResult<Value> {
     }
 }
 
-pub async fn task_status(Json(id): Json<ReqTaskId>) -> HandlerResult<CheckPoint> {
+pub async fn task_checkpoint(Json(id): Json<ReqTaskId>) -> HandlerResult<CheckPoint> {
     match service_task_checkpoint(&id.task_id) {
         Ok(c) => Ok(Json(Response::ok(c))),
         Err(e) => {

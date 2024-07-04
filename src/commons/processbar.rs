@@ -1,4 +1,4 @@
-use crate::tasks::{get_live_transfer_task_status, FilePosition};
+use crate::{resources::get_task_status, tasks::FilePosition};
 use dashmap::DashMap;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use std::{
@@ -28,15 +28,21 @@ pub async fn quantify_processbar(
     .progress_chars("#>-");
     pb.set_style(progress_style);
 
+    // 符合 stop_mark is false 并且 transferStage::stock
     while !stop_mark.load(std::sync::atomic::Ordering::Relaxed) {
-        let task_status = match get_live_transfer_task_status(&task_id) {
-            Ok(s) => s,
-            Err(_) => return,
+        match get_task_status(&task_id) {
+            Ok(ts) => match ts.is_running_stock() {
+                true => {}
+                false => {
+                    break;
+                }
+            },
+            Err(e) => {
+                log::error!("{:?}", e);
+                break;
+            }
         };
 
-        if !task_status.status.is_stock_running() {
-            return;
-        }
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         let line_num = status_map
             .iter()

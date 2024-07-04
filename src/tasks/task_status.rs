@@ -48,6 +48,32 @@ impl TaskStatus {
         }
     }
 
+    pub fn is_running_stock(&self) -> bool {
+        return match &self.status {
+            Status::Transfer(t) => match t {
+                TransferStatus::Running(r) => match r {
+                    TransferStage::Stock => true,
+                    _ => false,
+                },
+                _ => false,
+            },
+            Status::Compare(_) => todo!(),
+        };
+    }
+
+    pub fn is_running_increment(&self) -> bool {
+        return match &self.status {
+            Status::Transfer(t) => match t {
+                TransferStatus::Running(r) => match r {
+                    TransferStage::Increment => true,
+                    _ => false,
+                },
+                _ => false,
+            },
+            Status::Compare(_) => todo!(),
+        };
+    }
+
     pub fn is_stopped(&self) -> bool {
         match &self.status {
             Status::Transfer(t) => match t {
