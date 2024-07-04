@@ -1,6 +1,6 @@
 use super::{
-    CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_LIVING_TRANSFER_TASK_MAP,
-    GLOBAL_TASK_JOINSET, GLOBAL_TASK_STOP_MARK_MAP,
+    CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_TASK_JOINSET,
+    GLOBAL_TASK_STOP_MARK_MAP,
 };
 use crate::{
     commons::{
@@ -11,8 +11,8 @@ use crate::{
     resources::{CF_TASK, GLOBAL_ROCKSDB},
     s3::OSSDescription,
     tasks::{
-        get_exec_joinset, get_live_transfer_task_status, remove_exec_joinset, save_task_status,
-        LogInfo, TransferTaskStatusType,
+        get_live_transfer_task_status, remove_exec_joinset, save_task_status, LogInfo,
+        TransferTaskStatusType,
     },
 };
 use anyhow::{anyhow, Result};
@@ -217,6 +217,9 @@ impl Task {
 
     pub async fn execute(&self) {
         match self {
+            //Todo
+            // 重构task status，使用cf记录
+            // 主动停止任务时更新任务为停止状态，执行完成时不更新任务状态
             Task::Transfer(transfer) => {
                 match transfer.execute().await {
                     Ok(_) => {
@@ -256,17 +259,7 @@ impl Task {
                 }
                 remove_exec_joinset(&transfer.task_id);
             }
-            // Task::TruncateBucket(truncate) => match truncate.exec_multi_threads() {
-            //     Ok(_) => {
-            //         let log_info = LogInfo::<String> {
-            //             task_id: truncate.task_id.clone(),
-            //             msg: "execute ok!".to_string(),
-            //             additional: None,
-            //         };
-            //         log::info!("{:?}", log_info)
-            //     }
-            //     Err(e) => log::error!("{:?}", e),
-            // },
+
             Task::Compare(compare) => match compare.execute() {
                 Ok(_) => {
                     let log_info = LogInfo::<String> {

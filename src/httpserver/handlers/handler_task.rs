@@ -1,8 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
-
 use super::HandlerResult;
 use crate::httpserver::service::service_task::service_task_checkpoint;
-use crate::tasks::{task_is_living, CheckPoint, TransferTaskStatus};
+use crate::resources::living_tasks;
+use crate::tasks::{CheckPoint, TaskStatus};
 use crate::{
     httpserver::{
         exception::{AppError, AppErrorType},
@@ -12,10 +11,11 @@ use crate::{
             service_start_task, service_stop_task, service_task_create, service_update_task,
         },
     },
-    tasks::{Task, GLOBAL_LIVING_TRANSFER_TASK_MAP},
+    tasks::Task,
 };
 use axum::Json;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 
 pub async fn task_create(Json(mut task): Json<Task>) -> HandlerResult<Value> {
     match service_task_create(&mut task) {
@@ -151,13 +151,27 @@ pub async fn task_all() -> HandlerResult<Vec<RespListTask>> {
     }
 }
 
-pub async fn task_all_living() -> HandlerResult<HashMap<String, TransferTaskStatus>> {
-    let mut map = HashMap::new();
-    for item in GLOBAL_LIVING_TRANSFER_TASK_MAP.iter() {
-        map.insert(item.key().to_string(), item.value().clone());
-        if task_is_living(item.key().as_str()) {
-            map.insert(item.key().to_string(), item.value().clone());
+// pub async fn task_all_living() -> HandlerResult<HashMap<String, TransferTaskStatus>> {
+//     let mut map = HashMap::new();
+//     for item in GLOBAL_LIVING_TRANSFER_TASK_MAP.iter() {
+//         map.insert(item.key().to_string(), item.value().clone());
+//         if task_is_living(item.key().as_str()) {
+//             map.insert(item.key().to_string(), item.value().clone());
+//         }
+//     }
+//     Ok(Json(Response::ok(map)))
+// }
+
+pub async fn task_all_living() -> HandlerResult<Vec<TaskStatus>> {
+    match living_tasks() {
+        Ok(v) => Ok(Json(Response::ok(v))),
+        Err(e) => {
+            let err = AppError {
+                message: Some(e.to_string()),
+                cause: None,
+                error_type: AppErrorType::UnknowErr,
+            };
+            return Err(err);
         }
     }
-    Ok(Json(Response::ok(map)))
 }

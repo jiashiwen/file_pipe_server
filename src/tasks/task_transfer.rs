@@ -648,7 +648,6 @@ impl TransferTask {
 
         // 配置停止 offset save 标识为 true
         // snapshot_stop_mark.store(true, std::sync::atomic::Ordering::Relaxed);
-
         if stop_mark.load(std::sync::atomic::Ordering::Relaxed) {
             match err_counter
                 .load(std::sync::atomic::Ordering::Relaxed)

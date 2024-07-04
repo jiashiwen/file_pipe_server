@@ -945,10 +945,10 @@ impl OssClient {
 
 pub async fn multipart_transfer_obj_paralle_by_range(
     stop_mark: Arc<AtomicBool>,
-    s_client: Arc<OssClient>,
+    s_client: OssClient,
     s_bucket: &str,
     s_key: &str,
-    t_client: Arc<OssClient>,
+    t_client: OssClient,
     t_bucket: &str,
     t_key: &str,
     expires: Option<aws_smithy_types::DateTime>,
@@ -957,9 +957,10 @@ pub async fn multipart_transfer_obj_paralle_by_range(
     multi_part_chunks_per_batch: usize,
     multi_part_parallelism: usize,
 ) -> Result<()> {
-    let multipart_upload_res: CreateMultipartUploadOutput = t_client
-        .create_multipart_upload(t_bucket, t_key, expires)
-        .await?;
+    let sc = Arc::new(s_client);
+    let tc = Arc::new(t_client);
+    let multipart_upload_res: CreateMultipartUploadOutput =
+        tc.create_multipart_upload(t_bucket, t_key, expires).await?;
 
     let upload_id = match multipart_upload_res.upload_id() {
         Some(id) => id,
@@ -974,10 +975,10 @@ pub async fn multipart_transfer_obj_paralle_by_range(
 
     let completed_parts = transfer_object_parts_by_range(
         stop_mark,
-        s_client,
+        sc,
         s_bucket,
         s_key,
-        t_client.clone(),
+        tc.clone(),
         t_bucket,
         t_key,
         upload_id,
@@ -989,8 +990,7 @@ pub async fn multipart_transfer_obj_paralle_by_range(
     .await?;
 
     // 完成上传文件合并
-    t_client
-        .complete_multipart_upload(t_bucket, t_key, upload_id, completed_parts)
+    tc.complete_multipart_upload(t_bucket, t_key, upload_id, completed_parts)
         .await?;
     Ok(())
 }

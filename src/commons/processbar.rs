@@ -1,4 +1,4 @@
-use crate::tasks::{get_live_transfer_task_status, save_task_status, FilePosition};
+use crate::tasks::{get_live_transfer_task_status, FilePosition};
 use dashmap::DashMap;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use std::{
@@ -40,7 +40,7 @@ pub async fn quantify_processbar(
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         let line_num = status_map
             .iter()
-            .filter(|f| f.key().starts_with(key_prefix))
+            .filter(|f| f.key().starts_with(&task_id))
             .map(|m| m.line_num)
             .min();
         match line_num {

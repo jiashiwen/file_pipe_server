@@ -109,6 +109,7 @@ impl TransferTaskActions for TransferOss2Oss {
 
                     if record_vec.len() > 0 {
                         let transfer = TransferOss2OssRecordsExecutor {
+                            task_id: self.task_id.clone(),
                             source: self.source.clone(),
                             target: self.target.clone(),
                             err_counter: Arc::new(AtomicUsize::new(0)),
@@ -143,6 +144,7 @@ impl TransferTaskActions for TransferOss2Oss {
         list_file: String,
     ) {
         let transfer = TransferOss2OssRecordsExecutor {
+            task_id: self.task_id.clone(),
             source: self.source.clone(),
             target: self.target.clone(),
             err_counter,
@@ -185,6 +187,7 @@ impl TransferTaskActions for TransferOss2Oss {
         list_file: String,
     ) {
         let transfer = TransferOss2OssRecordsExecutor {
+            task_id: self.task_id.clone(),
             source: self.source.clone(),
             target: self.target.clone(),
             err_counter,
@@ -652,6 +655,7 @@ impl TransferOss2Oss {
         list_file: String,
     ) {
         let oss2oss = TransferOss2OssRecordsExecutor {
+            task_id: self.task_id.clone(),
             target: self.target.clone(),
             source: self.source.clone(),
             err_counter,
@@ -678,6 +682,7 @@ impl TransferOss2Oss {
 // add stop mark to control stop event
 #[derive(Debug, Clone)]
 pub struct TransferOss2OssRecordsExecutor {
+    pub task_id: String,
     pub source: OSSDescription,
     pub target: OSSDescription,
     pub err_counter: Arc<AtomicUsize>,
@@ -694,8 +699,11 @@ impl TransferOss2OssRecordsExecutor {
         executing_transfers: Arc<RwLock<usize>>,
     ) -> Result<()> {
         let subffix = records[0].offset.to_string();
-        let mut offset_key = OFFSET_PREFIX.to_string();
+        // let mut offset_key = OFFSET_PREFIX.to_string();
+        let mut offset_key = self.task_id.clone();
+        offset_key.push_str("_");
         offset_key.push_str(&subffix);
+
         let error_file_name = gen_file_path(
             &self.attributes.meta_dir,
             TRANSFER_ERROR_RECORD_PREFIX,
@@ -789,8 +797,8 @@ impl TransferOss2OssRecordsExecutor {
         &self,
         executing_transfers: Arc<RwLock<usize>>,
         record: &ListedRecord,
-        source_oss: &Arc<OssClient>,
-        target_oss: &Arc<OssClient>,
+        source_oss: &OssClient,
+        target_oss: &OssClient,
         target_key: &str,
     ) -> Result<()> {
         let s_obj_output = match source_oss
@@ -870,7 +878,9 @@ impl TransferOss2OssRecordsExecutor {
     ) -> Result<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let mut subffix = records[0].list_file_position.offset.to_string();
-        let mut offset_key = OFFSET_PREFIX.to_string();
+        // let mut offset_key = OFFSET_PREFIX.to_string();
+        let mut offset_key = self.task_id.clone();
+        offset_key.push_str("_");
         offset_key.push_str(&subffix);
 
         subffix.push_str("_");
@@ -939,8 +949,8 @@ impl TransferOss2OssRecordsExecutor {
     async fn record_description_handler(
         &self,
         executing_transfers: Arc<RwLock<usize>>,
-        source_oss: &Arc<OssClient>,
-        target_oss: &Arc<OssClient>,
+        source_oss: &OssClient,
+        target_oss: &OssClient,
         record: &RecordDescription,
     ) -> Result<()> {
         // 目标object存在则不推送
@@ -1004,7 +1014,6 @@ impl TransferOss2OssRecordsExecutor {
                     }
                     false => {
                         let e_t = Arc::clone(&executing_transfers);
-
                         multipart_transfer_obj_paralle_by_range(
                             self.stop_mark.clone(),
                             source_oss.clone(),

@@ -115,7 +115,6 @@ impl CheckPoint {
     }
 }
 
-// pub fn get_task_checkpoint(checkpoint_file: &str, meta_dir: &str) -> Result<CheckPoint> {
 pub fn get_task_checkpoint(checkpoint_file: &str) -> Result<CheckPoint> {
     let checkpoint = read_yaml_file::<CheckPoint>(checkpoint_file)?;
     Ok(checkpoint)
