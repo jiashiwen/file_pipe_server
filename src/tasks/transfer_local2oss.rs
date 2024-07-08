@@ -394,10 +394,10 @@ impl TransferTaskActions for TransferLocal2Oss {
 
     async fn execute_increment(
         &self,
-        // _joinset: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
+        stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
         snapshot_stop_mark: Arc<AtomicBool>,
@@ -645,7 +645,6 @@ impl Local2OssExecuter {
     pub async fn exec_listed_records(
         &self,
         records: Vec<ListedRecord>,
-        // executing_transfers: Arc<AtomicUsize>,
         executing_transfers: Arc<RwLock<usize>>,
     ) -> Result<()> {
         let subffix = records[0].offset.to_string();
@@ -686,8 +685,6 @@ impl Local2OssExecuter {
 
             let e_u = Arc::clone(&executing_transfers);
             if let Err(e) = self
-                // .listed_record_handler(js, e_u, &source_file_path, &target_oss_client, &target_key)
-                // .await
                 .listed_record_handler(e_u, &source_file_path, &target_oss_client, &target_key)
                 .await
             {

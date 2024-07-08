@@ -1,4 +1,3 @@
-use super::TransferTaskStatus;
 use crate::resources::get_checkpoint;
 use crate::resources::living_tasks;
 use crate::tasks::FilePosition;
@@ -61,11 +60,6 @@ fn init_task_runtime() -> Result<Runtime> {
         .max_io_events_per_tick(32)
         .build()?;
     Ok(rt)
-}
-
-fn init_global_joinset() -> JoinSet<()> {
-    let set: JoinSet<()> = JoinSet::new();
-    set
 }
 
 pub struct TasksStatusSaver {

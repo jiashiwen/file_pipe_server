@@ -720,7 +720,6 @@ impl OssClient {
             parts_vec.push(f_p);
 
             if (parts_vec.len() % batch).eq(&0) || part_num_usize.eq(&file_parts_len) {
-                // let e_t = Arc::clone(&executing_transfers);
                 let e_t = executing_transfers.clone();
                 let c = Arc::clone(&arc_client);
                 let err_mark = Arc::clone(&err_mark);
@@ -956,6 +955,7 @@ pub async fn multipart_transfer_obj_paralle_by_range(
     multi_part_chunk_size: usize,
     multi_part_chunks_per_batch: usize,
     multi_part_parallelism: usize,
+    multi_part_max_parallelism: usize,
 ) -> Result<()> {
     let sc = Arc::new(s_client);
     let tc = Arc::new(t_client);
@@ -969,11 +969,21 @@ pub async fn multipart_transfer_obj_paralle_by_range(
         }
     };
 
-    while executing_transfers.read().await.ge(&multi_part_parallelism) {
+    while executing_transfers
+        .read()
+        .await
+        .ge(&multi_part_max_parallelism)
+    {
         task::yield_now().await;
     }
 
-    let completed_parts = transfer_object_parts_by_range(
+    {
+        let mut executing = executing_transfers.write().await;
+        *executing += multi_part_parallelism;
+        println!("{}", executing);
+    }
+
+    let result_completed_parts = transfer_object_parts_by_range(
         stop_mark,
         sc,
         s_bucket,
@@ -986,8 +996,17 @@ pub async fn multipart_transfer_obj_paralle_by_range(
         multi_part_chunk_size,
         multi_part_chunks_per_batch,
         multi_part_parallelism,
+        // multi_part_max_parallelism,
     )
-    .await?;
+    .await;
+
+    {
+        let mut executing = executing_transfers.write().await;
+        *executing -= multi_part_parallelism;
+        println!("after multi transfer:{}", executing);
+    }
+
+    let completed_parts = result_completed_parts?;
 
     // 完成上传文件合并
     tc.complete_multipart_upload(t_bucket, t_key, upload_id, completed_parts)
@@ -1008,6 +1027,7 @@ pub async fn transfer_object_parts_by_range(
     multi_part_chunk_size: usize,
     multi_part_chunks_per_batch: usize,
     multi_part_parallelism: usize,
+    // multi_part_max_parallelism: usize,
 ) -> Result<Vec<CompletedPart>> {
     let s_obj = s_client
         .client
@@ -1019,10 +1039,8 @@ pub async fn transfer_object_parts_by_range(
     let vec_obj_range = gen_object_part_plan(&s_obj, multi_part_chunk_size)?;
     let err_mark = Arc::new(AtomicBool::new(false));
     let mut joinset = JoinSet::new();
-
     let completed_parts_btree: Arc<Mutex<BTreeMap<i32, CompletedPart>>> =
         Arc::new(Mutex::new(BTreeMap::new()));
-
     let mut vec_obj_range_tmp = vec![];
     let vec_obj_range_len = vec_obj_range.len();
 
@@ -1036,8 +1054,11 @@ pub async fn transfer_object_parts_by_range(
         if vec_obj_range_tmp.len().eq(&multi_part_chunks_per_batch)
             || vec_obj_range_len.eq(&TryInto::<usize>::try_into(part_num)?)
         {
-            while executing_transfers.read().await.ge(&multi_part_parallelism) {
-                task::yield_now().await;
+            // while executing_transfers.read().await.ge(&multi_part_parallelism) {
+            //     task::yield_now().await;
+            // }
+            while joinset.len().ge(&multi_part_parallelism) {
+                joinset.join_next().await;
             }
 
             let s_m = stop_mark.clone();
@@ -1054,10 +1075,10 @@ pub async fn transfer_object_parts_by_range(
             let e_m = Arc::clone(&err_mark);
 
             joinset.spawn(async move {
-                {
-                    let mut num = e_t.write().await;
-                    *num += 1;
-                }
+                // {
+                //     let mut num = e_t.write().await;
+                //     *num += 1;
+                // }
                 if let Err(e) = transfer_parts_batch_by_range(
                     s_m, s_c, t_c, &s_b, &t_b, &s_k, &t_k, &up_id, v_o_r, c_b_t,
                 )
@@ -1067,17 +1088,17 @@ pub async fn transfer_object_parts_by_range(
                     e_m.store(true, std::sync::atomic::Ordering::SeqCst);
                 };
 
-                let mut num = e_t.write().await;
-                *num -= 1;
+                // let mut num = e_t.write().await;
+                // *num -= 1;
             });
             vec_obj_range_tmp.clear();
         }
     }
 
     while joinset.len() > 0 {
-        if err_mark.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(anyhow!("upload error"));
-        }
+        // if err_mark.load(std::sync::atomic::Ordering::SeqCst) {
+        //     return Err(anyhow!("upload error"));
+        // }
         joinset.join_next().await;
     }
 

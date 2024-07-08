@@ -122,7 +122,7 @@ pub fn get_task_status(task_id: &str) -> Result<TaskStatus> {
     };
     let status_bytes = match GLOBAL_ROCKSDB.get_cf(&cf, task_id)? {
         Some(b) => b,
-        None => return Err(anyhow!("task status not exist")),
+        None => return Err(anyhow!("task {} status not exist", task_id)),
     };
     let status = bincode::deserialize(&status_bytes)?;
 

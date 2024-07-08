@@ -1,5 +1,7 @@
 use super::HandlerResult;
-use crate::httpserver::service::service_task::{service_clean_task, service_task_checkpoint};
+use crate::httpserver::service::service_task::{
+    service_clean_task, service_task_checkpoint, service_task_status,
+};
 use crate::resources::living_tasks;
 use crate::tasks::{clean_task, CheckPoint, TaskStatus};
 use crate::{
@@ -151,6 +153,20 @@ pub async fn task_show(Json(id): Json<ReqTaskId>) -> HandlerResult<Task> {
         }
     }
 }
+pub async fn task_status(Json(id): Json<ReqTaskId>) -> HandlerResult<TaskStatus> {
+    match service_task_status(&id.task_id) {
+        Ok(status) => Ok(Json(Response::ok(status))),
+        Err(e) => {
+            let err = AppError {
+                message: Some(e.to_string()),
+                cause: None,
+                error_type: AppErrorType::UnknowErr,
+            };
+            return Err(err);
+        }
+    }
+}
+
 pub async fn task_all() -> HandlerResult<Vec<RespListTask>> {
     match service_list_all_tasks() {
         Ok(task_vec) => Ok(Json(Response::ok(task_vec))),
@@ -164,17 +180,6 @@ pub async fn task_all() -> HandlerResult<Vec<RespListTask>> {
         }
     }
 }
-
-// pub async fn task_all_living() -> HandlerResult<HashMap<String, TransferTaskStatus>> {
-//     let mut map = HashMap::new();
-//     for item in GLOBAL_LIVING_TRANSFER_TASK_MAP.iter() {
-//         map.insert(item.key().to_string(), item.value().clone());
-//         if task_is_living(item.key().as_str()) {
-//             map.insert(item.key().to_string(), item.value().clone());
-//         }
-//     }
-//     Ok(Json(Response::ok(map)))
-// }
 
 pub async fn task_all_living() -> HandlerResult<Vec<TaskStatus>> {
     match living_tasks() {

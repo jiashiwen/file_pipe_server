@@ -338,10 +338,10 @@ impl TransferTaskActions for TransferLocal2Local {
 
     async fn execute_increment(
         &self,
-        // _joinset: &mut JoinSet<()>,
         _execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
+        stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
         snapshot_stop_mark: Arc<AtomicBool>,

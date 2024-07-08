@@ -133,7 +133,6 @@ impl TransferTaskActions for TransferOss2Oss {
     // 记录执行器
     async fn listed_records_transfor(
         &self,
-        // execute_set: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<ListedRecord>,
@@ -162,16 +161,6 @@ impl TransferTaskActions for TransferOss2Oss {
                 log::error!("{}", e);
             };
         });
-
-        // execute_set.spawn(async move {
-        //     if let Err(e) = transfer
-        //         .exec_listed_records(records, executing_transfers)
-        //         .await
-        //     {
-        //         stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
-        //         log::error!("{}", e);
-        //     };
-        // });
     }
 
     async fn record_descriptions_transfor(
@@ -456,10 +445,10 @@ impl TransferTaskActions for TransferOss2Oss {
 
     async fn execute_increment(
         &self,
-        // mut execute_set: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
+        stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
         snapshot_stop_mark: Arc<AtomicBool>,
@@ -557,10 +546,10 @@ impl TransferTaskActions for TransferOss2Oss {
                     }
                     let vk = vec_keys.clone();
                     self.record_discriptions_excutor(
-                        // &mut execute_set,
                         execute_set.clone(),
                         executing_transfers.clone(),
                         vk,
+                        stop_mark.clone(),
                         Arc::clone(&err_counter),
                         Arc::clone(&offset_map),
                         modified.path.clone(),
@@ -583,10 +572,10 @@ impl TransferTaskActions for TransferOss2Oss {
 
                 let vk = vec_keys.clone();
                 self.record_discriptions_excutor(
-                    // &mut execute_set,
                     execute_set.clone(),
                     executing_transfers.clone(),
                     vk,
+                    stop_mark.clone(),
                     Arc::clone(&err_counter),
                     Arc::clone(&offset_map),
                     modified.path.clone(),
@@ -645,10 +634,10 @@ impl TransferOss2Oss {
     // record_discriptions_excutor 函数增加 stop_mark 进行停止控制
     async fn record_discriptions_excutor(
         &self,
-        // joinset: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
+        stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
         list_file: String,
@@ -658,7 +647,7 @@ impl TransferOss2Oss {
             target: self.target.clone(),
             source: self.source.clone(),
             err_counter,
-            stop_mark: Arc::new(AtomicBool::new(false)),
+            stop_mark: stop_mark.clone(),
             offset_map,
             attributes: self.attributes.clone(),
             list_file_path: list_file,
@@ -698,7 +687,6 @@ impl TransferOss2OssRecordsExecutor {
         executing_transfers: Arc<RwLock<usize>>,
     ) -> Result<()> {
         let subffix = records[0].offset.to_string();
-        // let mut offset_key = OFFSET_PREFIX.to_string();
         let mut offset_key = self.task_id.clone();
         offset_key.push_str("_");
         offset_key.push_str(&subffix);
@@ -864,6 +852,7 @@ impl TransferOss2OssRecordsExecutor {
                     self.attributes.multi_part_chunk_size,
                     self.attributes.multi_part_chunks_per_batch,
                     self.attributes.multi_part_parallelism,
+                    self.attributes.multi_part_max_parallelism,
                 )
                 .await
             }
@@ -877,7 +866,6 @@ impl TransferOss2OssRecordsExecutor {
     ) -> Result<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let mut subffix = records[0].list_file_position.offset.to_string();
-        // let mut offset_key = OFFSET_PREFIX.to_string();
         let mut offset_key = self.task_id.clone();
         offset_key.push_str("_");
         offset_key.push_str(&subffix);
@@ -1026,6 +1014,7 @@ impl TransferOss2OssRecordsExecutor {
                             self.attributes.multi_part_chunk_size,
                             self.attributes.multi_part_chunks_per_batch,
                             self.attributes.multi_part_parallelism,
+                            self.attributes.multi_part_max_parallelism,
                         )
                         .await
                     }

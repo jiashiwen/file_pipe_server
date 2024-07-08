@@ -195,6 +195,8 @@ pub struct TransferTaskAttributes {
     pub multi_part_chunks_per_batch: usize,
     #[serde(default = "TaskDefaultParameters::multi_part_parallelism_default")]
     pub multi_part_parallelism: usize,
+    #[serde(default = "TaskDefaultParameters::multi_part_parallelism_default")]
+    pub multi_part_max_parallelism: usize,
     #[serde(default = "TaskDefaultParameters::filter_default")]
     pub exclude: Option<Vec<String>>,
     #[serde(default = "TaskDefaultParameters::filter_default")]
@@ -219,6 +221,7 @@ impl Default for TransferTaskAttributes {
             multi_part_chunks_per_batch: TaskDefaultParameters::multi_part_chunks_per_batch_default(
             ),
             multi_part_parallelism: TaskDefaultParameters::multi_part_parallelism_default(),
+            multi_part_max_parallelism: TaskDefaultParameters::multi_part_max_parallelism_default(),
             exclude: TaskDefaultParameters::filter_default(),
             include: TaskDefaultParameters::filter_default(),
             transfer_type: TaskDefaultParameters::transfer_type_default(),
@@ -328,7 +331,6 @@ impl TransferTask {
             status: Status::Transfer(TransferStatus::Starting),
         };
         let _ = save_task_status_to_cf(task_status)?;
-        // save_task_status(&self.task_id, task_status);
 
         let mut executed_file = FileDescription {
             path: gen_file_path(
@@ -703,7 +705,6 @@ impl TransferTask {
         drop(lock);
 
         // 增量逻辑
-        // Todo 废弃task_is_living，使用新的状态属性
         let task_status = get_task_status(&self.task_id)?;
         if task_status.is_running_increment()
             && !stop_mark.load(std::sync::atomic::Ordering::Relaxed)
@@ -713,10 +714,10 @@ impl TransferTask {
 
             let _ = task_increment
                 .execute_increment(
-                    // &mut execut_set,
                     task_exec_set.clone(),
                     executing_transfers,
                     Arc::clone(&increment_assistant),
+                    stop_mark.clone(),
                     Arc::clone(&err_counter),
                     Arc::clone(&offset_map),
                     stop_mark.clone(),

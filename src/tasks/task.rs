@@ -1,6 +1,6 @@
 use super::{
     CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_LIST_FILE_POSITON_MAP,
-    GLOBAL_TASKS_EXEC_JOINSET, GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_STOP_MARK_MAP,
+    GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_STOP_MARK_MAP,
 };
 use crate::{
     commons::{
@@ -328,6 +328,10 @@ impl TaskDefaultParameters {
         10
     }
     pub fn multi_part_parallelism_default() -> usize {
+        num_cpus::get() + 2
+    }
+
+    pub fn multi_part_max_parallelism_default() -> usize {
         num_cpus::get() * 2
     }
 

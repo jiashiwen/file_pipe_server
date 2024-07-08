@@ -3,9 +3,10 @@ use crate::{
     configure::get_config,
     httpserver::module::RespListTask,
     resources::{
-        get_checkpoint, get_task, remove_task_from_cf, task_is_living, CF_TASK, GLOBAL_ROCKSDB,
+        get_checkpoint, get_task, get_task_status, remove_task_from_cf, task_is_living, CF_TASK,
+        GLOBAL_ROCKSDB,
     },
-    tasks::{clean_task, gen_file_path, CheckPoint, Task, GLOBAL_TASK_RUNTIME},
+    tasks::{clean_task, gen_file_path, CheckPoint, Task, TaskStatus, GLOBAL_TASK_RUNTIME},
 };
 use anyhow::Result;
 use anyhow::{anyhow, Context};
@@ -101,6 +102,10 @@ pub fn service_show_task(task_id: &str) -> Result<Task> {
         }
         None => Err(anyhow!("task {} not exist", task_id)),
     };
+}
+
+pub fn service_task_status(task_id: &str) -> Result<TaskStatus> {
+    get_task_status(task_id)
 }
 
 pub fn service_task_checkpoint(task_id: &str) -> Result<CheckPoint> {

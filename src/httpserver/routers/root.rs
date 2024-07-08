@@ -1,6 +1,6 @@
 use crate::httpserver::handlers::{
     current_config, rbatis_t_insert, redis_put, root, task_all, task_all_living, task_analyze,
-    task_checkpoint, task_clean, task_create, task_show, task_start, task_stop,
+    task_checkpoint, task_clean, task_create, task_show, task_start, task_status, task_stop,
     task_template_transfer_local2local, task_template_transfer_local2oss,
     task_template_transfer_oss2local, task_template_transfer_oss2oss, task_update, tasks_remove,
 };
@@ -47,6 +47,7 @@ pub fn router_root() -> Router {
         .route("/stop", post(task_stop))
         .route("/checkpoint", post(task_checkpoint))
         .route("/show", post(task_show))
+        .route("/status", post(task_status))
         .route("/analyze", post(task_analyze))
         .route("/all", post(task_all))
         .route("/all_living", post(task_all_living))
