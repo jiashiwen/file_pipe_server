@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct KV {
-    pub Key: String,
-    pub Value: String,
+    pub key: String,
+    pub value: String,
 }
 
 #[derive(Deserialize, Serialize)]

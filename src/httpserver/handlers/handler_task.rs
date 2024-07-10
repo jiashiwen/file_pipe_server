@@ -3,7 +3,7 @@ use crate::httpserver::service::service_task::{
     service_clean_task, service_task_checkpoint, service_task_status,
 };
 use crate::resources::living_tasks;
-use crate::tasks::{clean_task, CheckPoint, TaskStatus};
+use crate::tasks::{CheckPoint, TaskStatus};
 use crate::{
     httpserver::{
         exception::{AppError, AppErrorType},

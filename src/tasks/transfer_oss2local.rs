@@ -197,6 +197,7 @@ impl TransferTaskActions for TransferOss2Local {
 
         let source_client = self.source.gen_oss_client()?;
 
+        // 遍历本地目录，找出远端删除的key
         for entry in WalkDir::new(&self.target)
             .into_iter()
             .filter_map(Result::ok)
@@ -343,7 +344,6 @@ impl TransferTaskActions for TransferOss2Local {
 
     async fn record_descriptions_transfor(
         &self,
-        // joinset: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,

@@ -510,7 +510,7 @@ impl TransferTaskActions for TransferOss2Oss {
 
             // 按列表传输object from source to target
             let lines: io::Lines<io::BufReader<File>> = io::BufReader::new(modified_file).lines();
-            for line in lines {
+            for (idx, line) in lines.enumerate() {
                 // 若错误达到上限，则停止任务
                 if err_counter.load(std::sync::atomic::Ordering::SeqCst)
                     >= self.attributes.max_errors
@@ -540,6 +540,9 @@ impl TransferTaskActions for TransferOss2Oss {
                     .len()
                     .to_string()
                     .eq(&self.attributes.objects_per_batch.to_string())
+                    || (idx + 1).eq(&TryInto::<usize>::try_into(modified.total_lines).unwrap())
+                        && err_counter.load(std::sync::atomic::Ordering::SeqCst)
+                            < self.attributes.max_errors
                 {
                     while execute_set.read().await.len() >= self.attributes.task_parallelism {
                         execute_set.write().await.join_next().await;
@@ -562,26 +565,26 @@ impl TransferTaskActions for TransferOss2Oss {
             }
 
             // 处理集合中的剩余数据，若错误达到上限，则不执行后续操作
-            if vec_keys.len() > 0
-                && err_counter.load(std::sync::atomic::Ordering::SeqCst)
-                    < self.attributes.max_errors
-            {
-                while execute_set.read().await.len() >= self.attributes.task_parallelism {
-                    execute_set.write().await.join_next().await;
-                }
+            // if vec_keys.len() > 0
+            //     && err_counter.load(std::sync::atomic::Ordering::SeqCst)
+            //         < self.attributes.max_errors
+            // {
+            //     while execute_set.read().await.len() >= self.attributes.task_parallelism {
+            //         execute_set.write().await.join_next().await;
+            //     }
 
-                let vk = vec_keys.clone();
-                self.record_discriptions_excutor(
-                    execute_set.clone(),
-                    executing_transfers.clone(),
-                    vk,
-                    stop_mark.clone(),
-                    Arc::clone(&err_counter),
-                    Arc::clone(&offset_map),
-                    modified.path.clone(),
-                )
-                .await;
-            }
+            //     let vk = vec_keys.clone();
+            //     self.record_discriptions_excutor(
+            //         execute_set.clone(),
+            //         executing_transfers.clone(),
+            //         vk,
+            //         stop_mark.clone(),
+            //         Arc::clone(&err_counter),
+            //         Arc::clone(&offset_map),
+            //         modified.path.clone(),
+            //     )
+            //     .await;
+            // }
 
             while execute_set.read().await.len() > 0 {
                 execute_set.write().await.join_next().await;

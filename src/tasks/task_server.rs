@@ -11,11 +11,11 @@ use tokio::runtime::Runtime;
 use tokio::{sync::RwLock, task::JoinSet};
 
 pub static GLOBAL_TASK_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
-    let rocksdb = match init_task_runtime() {
+    let runtime = match init_task_runtime() {
         Ok(db) => db,
         Err(err) => panic!("{}", err),
     };
-    Arc::new(rocksdb)
+    Arc::new(runtime)
 });
 
 pub static GLOBAL_TASKS_SYS_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>>>>> =

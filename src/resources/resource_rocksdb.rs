@@ -14,6 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const CF_TASK_CHECKPOINTS: &'static str = "cf_task_checkpoints";
 pub const CF_TASK: &'static str = "cf_task";
 pub const CF_TASK_STATUS: &'static str = "cf_task_status";
+
 pub static GLOBAL_ROCKSDB: Lazy<Arc<DBWithThreadMode<MultiThreaded>>> = Lazy::new(|| {
     let rocksdb = match init_rocksdb("oss_pipe_rocksdb") {
         Ok(db) => db,
