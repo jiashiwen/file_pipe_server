@@ -17,24 +17,23 @@ pub fn service_task_create(task: &mut Task) -> Result<i64> {
     task.create()
 }
 
-pub fn service_remove_tasks(task_ids: Vec<String>) -> Result<()> {
-    for id in task_ids {
-        service_remove_task(&id).context(format!("{}:{}", file!(), line!()))?;
-    }
-    Ok(())
-}
-
 pub fn service_remove_task(task_id: &str) -> Result<()> {
-    let task = match get_task(task_id)? {
+    let task = match get_task(task_id).context(format!("{}:{}", file!(), line!()))? {
         Some(t) => t,
         None => return Ok(()),
     };
-    task.clean()?;
+    task.clean().context(format!("{}:{}", file!(), line!()))?;
+    clean_task(task_id)?;
     remove_task_from_cf(task_id)
 }
 
 pub fn service_clean_task(task_id: &str) -> Result<()> {
-    clean_task(task_id)
+    let task = match get_task(task_id).context(format!("{}:{}", file!(), line!()))? {
+        Some(t) => t,
+        None => return Ok(()),
+    };
+    task.clean().context(format!("{}:{}", file!(), line!()))
+    // clean_task(task_id)
 }
 
 pub fn service_update_task(task_id: &str, task: &mut Task) -> Result<()> {

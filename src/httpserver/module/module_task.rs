@@ -3,12 +3,12 @@ use serde::{Deserialize, Serialize};
 use crate::tasks::Task;
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct ReqTaskId {
+pub struct TaskId {
     pub task_id: String,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct ReqTaskIds {
+pub struct TaskIds {
     pub task_ids: Vec<String>,
 }
 

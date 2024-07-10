@@ -15,7 +15,7 @@ use crate::{
     s3::OSSDescription,
     tasks::{remove_exec_joinset, LogInfo, Status, TransferStatus},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use aws_sdk_s3::types::ObjectIdentifier;
 use rocksdb::IteratorMode;
 use serde::{
@@ -158,11 +158,11 @@ impl Task {
         // 清理stop mark
         GLOBAL_TASK_STOP_MARK_MAP.remove(&task_id);
         // 清理任务状态 task status
-        remove_task_status_from_cf(&task_id)?;
+        remove_task_status_from_cf(&task_id).context(format!("{}:{}", file!(), line!()))?;
         // 清理任务checkpoint
-        remove_checkpoint_from_cf(&task_id)?;
+        remove_checkpoint_from_cf(&task_id).context(format!("{}:{}", file!(), line!()))?;
         // 清理meta dir
-        fs::remove_dir(self.meta_dir())?;
+        let _ = fs::remove_dir(self.meta_dir());
         Ok(())
     }
 
@@ -209,7 +209,7 @@ impl Task {
 
     pub fn create(&mut self) -> Result<i64> {
         if self.already_created()? {
-            return Err(anyhow!("task created"));
+            return Err(anyhow!("task already created"));
         }
         let id = task_id_generator();
         let global_meta_dir = get_config()?.meta_dir;
@@ -533,7 +533,7 @@ pub fn clean_task(task_id: &str) -> Result<()> {
     // 清理任务checkpoint
     remove_checkpoint_from_cf(&task_id)?;
     // Todo 清理meta dir,遍历current_config 中的meta_dir 目录，删除名为task_id 的子目录
-    // fs::remove_dir(self.meta_dir())?;
+    // let _ = fs::remove_dir(self.meta_dir());
     Ok(())
 }
 pub fn task_id_generator() -> i64 {

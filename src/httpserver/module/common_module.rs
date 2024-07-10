@@ -8,7 +8,7 @@ pub struct KV {
 
 #[derive(Deserialize, Serialize)]
 pub struct Key {
-    pub Key: String,
+    pub key: String,
 }
 
 #[derive(Deserialize, Serialize)]
