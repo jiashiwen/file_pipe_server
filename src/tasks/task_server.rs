@@ -29,11 +29,11 @@ pub static GLOBAL_TASKS_EXEC_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()
         map
     });
 
-pub static GLOBAL_TASKS_BIGFILE_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>>>>> =
-    Lazy::new(|| {
-        let map: DashMap<String, Arc<RwLock<JoinSet<()>>>> = DashMap::new();
-        map
-    });
+// pub static GLOBAL_TASKS_BIGFILE_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>>>>> =
+//     Lazy::new(|| {
+//         let map: DashMap<String, Arc<RwLock<JoinSet<()>>>> = DashMap::new();
+//         map
+//     });
 
 pub static GLOBAL_TASK_STOP_MARK_MAP: Lazy<Arc<DashMap<String, Arc<AtomicBool>>>> =
     Lazy::new(|| {

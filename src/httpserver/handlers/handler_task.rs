@@ -35,9 +35,10 @@ pub async fn task_create(Json(mut task): Json<Task>) -> HandlerResult<TaskId> {
     }
 }
 
-pub async fn task_update(Json(mut update): Json<ReqTaskUpdate>) -> HandlerResult<Value> {
+pub async fn task_update(Json(mut update): Json<ReqTaskUpdate>) -> HandlerResult<()> {
     match service_update_task(&update.task_id, &mut update.task) {
-        Ok(_) => Ok(Json(Response::ok(json!({"update":"ok"})))),
+        // Ok(_) => Ok(Json(Response::ok(json!({"update":"ok"})))),
+        Ok(_) => Ok(Json(Response::ok(()))),
         Err(e) => {
             let err = AppError {
                 message: Some(e.to_string()),
@@ -92,9 +93,10 @@ pub async fn task_analyze(Json(id): Json<TaskId>) -> HandlerResult<BTreeMap<Stri
     }
 }
 
-pub async fn task_start(Json(id): Json<TaskId>) -> HandlerResult<Value> {
+pub async fn task_start(Json(id): Json<TaskId>) -> HandlerResult<()> {
     match service_start_task(id.task_id.as_str()) {
-        Ok(_) => Ok(Json(Response::ok(json!({"start":&id.task_id})))),
+        // Ok(_) => Ok(Json(Response::ok(json!({"start":&id.task_id})))),
+        Ok(_) => Ok(Json(Response::ok(()))),
         Err(e) => {
             let err = AppError {
                 message: Some(e.to_string()),
@@ -115,9 +117,10 @@ pub async fn task_start(Json(id): Json<TaskId>) -> HandlerResult<Value> {
 //     Ok(Json(Response::ok(json!({"start":"ok"}))))
 // }
 
-pub async fn task_stop(Json(id): Json<TaskId>) -> HandlerResult<Value> {
+pub async fn task_stop(Json(id): Json<TaskId>) -> HandlerResult<()> {
     match service_stop_task(id.task_id.as_str()) {
-        Ok(_) => Ok(Json(Response::ok(json!({"stop":&id.task_id})))),
+        // Ok(_) => Ok(Json(Response::ok(json!({"stop":&id.task_id})))),
+        Ok(_) => Ok(Json(Response::ok(()))),
         Err(e) => {
             let err = AppError {
                 message: Some(e.to_string()),

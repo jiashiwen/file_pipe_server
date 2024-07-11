@@ -1,8 +1,12 @@
 use crate::commons::json_to_struct;
 use crate::commons::struct_to_json_string;
 use crate::tasks::CheckPoint;
+use crate::tasks::CompareStatus;
+use crate::tasks::Status;
 use crate::tasks::Task;
 use crate::tasks::TaskStatus;
+use crate::tasks::TaskStopReason;
+use crate::tasks::TransferStatus;
 use anyhow::anyhow;
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -44,6 +48,31 @@ pub fn init_rocksdb(db_path: &str) -> Result<DBWithThreadMode<MultiThreaded>> {
         ],
     )?;
     Ok(db)
+}
+
+// Todo
+// 增加server初始化时将任务状态为running的变更为broken
+pub fn change_taskstatus_to_stop() -> Result<()> {
+    let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK_STATUS) {
+        Some(cf) => cf,
+        None => return Err(anyhow!("column family not exist")),
+    };
+
+    for item in GLOBAL_ROCKSDB.iterator_cf(&cf, IteratorMode::Start) {
+        if let Ok(kv) = item {
+            let mut task_status: TaskStatus = bincode::deserialize(&kv.1)?;
+            if !task_status.is_stopped() {
+                task_status.status = match task_status.status {
+                    crate::tasks::Status::Transfer(_) => {
+                        Status::Transfer(TransferStatus::Stopped(TaskStopReason::Broken))
+                    }
+                    crate::tasks::Status::Compare(_) => Status::Compare(CompareStatus::Stopped),
+                }
+            }
+            let _ = save_task_status_to_cf(&mut task_status)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn save_checkpoint_to_cf(checkpoint: &mut CheckPoint) -> Result<()> {
