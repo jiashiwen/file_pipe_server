@@ -23,7 +23,8 @@ pub fn service_task_template_transfer_oss2oss() -> Result<Task> {
     transfer_oss2oss.source = ObjectStorage::OSS(oss_desc);
     transfer_oss2oss.attributes.last_modify_filter = Some(LastModifyFilter {
         filter_type: LastModifyFilterType::Greater,
-        timestamp: i128::from(now.as_secs()),
+        // timestamp: i128::from(now.as_secs()),
+        timestamp: usize::try_from(now.as_secs())?,
     });
 
     let task = Task::Transfer(transfer_oss2oss);
@@ -43,7 +44,8 @@ pub fn service_task_template_transfer_oss2local() -> Result<Task> {
     transfer_oss2local.attributes.include = Some(include_vec);
     transfer_oss2local.attributes.last_modify_filter = Some(LastModifyFilter {
         filter_type: LastModifyFilterType::Greater,
-        timestamp: i128::from(now.as_secs()),
+        // timestamp: i128::from(now.as_secs()),
+        timestamp: usize::try_from(now.as_secs())?,
     });
 
     let task = Task::Transfer(transfer_oss2local);
@@ -63,7 +65,8 @@ pub fn service_task_template_transfer_local2oss() -> Result<Task> {
     transfer_local2oss.attributes.include = Some(include_vec);
     transfer_local2oss.attributes.last_modify_filter = Some(LastModifyFilter {
         filter_type: LastModifyFilterType::Greater,
-        timestamp: i128::from(now.as_secs()),
+        // timestamp: i128::from(now.as_secs()),
+        timestamp: usize::try_from(now.as_secs())?,
     });
 
     let task = Task::Transfer(transfer_local2oss);
@@ -84,7 +87,8 @@ pub fn service_task_template_transfer_local2local() -> Result<Task> {
     transfer_local2local.attributes.include = Some(include_vec);
     transfer_local2local.attributes.last_modify_filter = Some(LastModifyFilter {
         filter_type: LastModifyFilterType::Greater,
-        timestamp: i128::from(now.as_secs()),
+        // timestamp: i128::from(now.as_secs()),
+        timestamp: usize::try_from(now.as_secs())?,
     });
 
     let task = Task::Transfer(transfer_local2local);

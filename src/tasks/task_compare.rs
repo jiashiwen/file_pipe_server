@@ -514,7 +514,8 @@ impl CompareTask {
                 file_for_notify: None,
                 task_stage: TransferStage::Stock,
                 modify_checkpoint_timestamp: 0,
-                task_begin_timestamp: i128::from(now.as_secs()),
+                // task_begin_timestamp: i128::from(now.as_secs()),
+                task_begin_timestamp: usize::try_from(now.as_secs()).unwrap(),
             };
             if let Err(e) = checkpoint.save_to(check_point_file.as_str()) {
                 log::error!("{}", e);

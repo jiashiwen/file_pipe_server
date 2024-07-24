@@ -41,11 +41,12 @@ pub const NOTIFY_FILE_PREFIX: &'static str = "notify_";
 pub const REMOVED_PREFIX: &'static str = "removed_";
 pub const MODIFIED_PREFIX: &'static str = "modified_";
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct AnalyzedResult {
-    pub max: i128,
-    pub min: i128,
-}
+// #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+// pub struct AnalyzedResult {
+//     pub max: i128,
+//     pub min: i128,
+// }
+
 /// 任务阶段，包括存量曾量全量
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum TransferStage {

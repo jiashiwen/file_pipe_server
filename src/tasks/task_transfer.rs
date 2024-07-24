@@ -406,7 +406,10 @@ impl TransferTask {
             // 重新生成object list file
             let _ = fs::remove_dir_all(self.attributes.meta_dir.as_str());
             executed_file = task
-                .gen_source_object_list_file(None, &executed_file.path)
+                .gen_source_object_list_file(
+                    self.attributes.last_modify_filter,
+                    &executed_file.path,
+                )
                 .await?;
         }
 
@@ -556,8 +559,10 @@ impl TransferTask {
                     executing_file_position: list_file_position.clone(),
                     file_for_notify: notify,
                     task_stage: TransferStage::Stock,
-                    modify_checkpoint_timestamp: i128::from(now.as_secs()),
-                    task_begin_timestamp: i128::from(now.as_secs()),
+                    // modify_checkpoint_timestamp: i128::from(now.as_secs()),
+                    modify_checkpoint_timestamp: usize::try_from(now.as_secs())?,
+                    // task_begin_timestamp: i128::from(now.as_secs()),
+                    task_begin_timestamp: usize::try_from(now.as_secs())?,
                 };
                 checkpoint.save_to_rocksdb_cf()?;
 
@@ -668,7 +673,7 @@ impl TransferTask {
         }
 
         let modify_checkpoint_timestamp =
-            i128::from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs());
+            usize::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())?;
         // 记录checkpoint
         let mut checkpoint: CheckPoint = CheckPoint {
             task_id: self.task_id.clone(),
@@ -677,7 +682,8 @@ impl TransferTask {
             file_for_notify: None,
             task_stage: TransferStage::Stock,
             modify_checkpoint_timestamp,
-            task_begin_timestamp: i128::from(now.as_secs()),
+            // task_begin_timestamp: i128::from(now.as_secs()),
+            task_begin_timestamp: usize::try_from(now.as_secs()).unwrap(),
         };
 
         if self.attributes.transfer_type.is_stock() {

@@ -111,12 +111,19 @@ pub fn analyze_folder_files_size(
             }
 
             if let Some(f) = &last_modify_filter {
-                let modified_time = entry
-                    .metadata()?
-                    .modified()?
-                    .duration_since(UNIX_EPOCH)?
-                    .as_secs();
-                if !f.filter(i128::from(modified_time)) {
+                // let modified_time = entry
+                //     .metadata()?
+                //     .modified()?
+                //     .duration_since(UNIX_EPOCH)?
+                //     .as_secs();
+                let modified_time = TryFrom::try_from(
+                    entry
+                        .metadata()?
+                        .modified()?
+                        .duration_since(UNIX_EPOCH)?
+                        .as_secs(),
+                )?;
+                if !f.filter(modified_time) {
                     continue;
                 }
             }
@@ -166,12 +173,19 @@ pub fn scan_folder_files_to_file(
             }
 
             if let Some(f) = last_modify_filter {
-                let modified_time = entry
-                    .metadata()?
-                    .modified()?
-                    .duration_since(UNIX_EPOCH)?
-                    .as_secs();
-                if !f.filter(i128::from(modified_time)) {
+                // let modified_time = entry
+                //     .metadata()?
+                //     .modified()?
+                //     .duration_since(UNIX_EPOCH)?
+                //     .as_secs();
+                let modified_time = TryFrom::try_from(
+                    entry
+                        .metadata()?
+                        .modified()?
+                        .duration_since(UNIX_EPOCH)?
+                        .as_secs(),
+                )?;
+                if !f.filter(modified_time) {
                     continue;
                 }
             }
