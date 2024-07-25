@@ -275,7 +275,7 @@ impl TransferTaskActions for TransferLocal2Local {
                         .duration_since(UNIX_EPOCH)?
                         .as_secs(),
                 )?;
-                if last_modify_filter.filter(modified_time) {
+                if last_modify_filter.is_match(modified_time) {
                     let record = RecordDescription {
                         source_key: p.to_string(),
                         target_key: target_key_str,
@@ -475,7 +475,7 @@ impl TransferTaskActions for TransferLocal2Local {
                         .await
                     {
                         Ok(r) => {
-                            if regex_filter.filter(&r.source_key) {
+                            if regex_filter.is_match(&r.source_key) {
                                 records.push(r);
                             }
                         }

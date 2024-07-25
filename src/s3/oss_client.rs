@@ -88,7 +88,7 @@ impl OssClient {
                         //     continue;
                         // }
 
-                        if !f.filter(usize::try_from(d.secs())?) {
+                        if !f.is_match(usize::try_from(d.secs())?) {
                             continue;
                         }
                     }
@@ -113,7 +113,7 @@ impl OssClient {
                             // if !f.filter(i128::from(d.secs())) {
                             //     continue;
                             // }
-                            if !f.filter(usize::try_from(d.secs())?) {
+                            if !f.is_match(usize::try_from(d.secs())?) {
                                 continue;
                             }
                         }
@@ -866,7 +866,7 @@ impl OssClient {
                 }
 
                 if let Some(f) = &regex_filter {
-                    if !f.filter(key) {
+                    if !f.is_match(key) {
                         continue;
                     }
                 }
@@ -876,7 +876,7 @@ impl OssClient {
                         // if !f.filter(i128::from(d.secs())) {
                         //     continue;
                         // }
-                        if !f.filter(usize::try_from(d.secs())?) {
+                        if !f.is_match(usize::try_from(d.secs())?) {
                             continue;
                         }
                     }
@@ -918,7 +918,7 @@ impl OssClient {
                     }
 
                     if let Some(f) = &regex_filter {
-                        if !f.filter(key) {
+                        if !f.is_match(key) {
                             continue;
                         }
                     }
@@ -928,7 +928,7 @@ impl OssClient {
                             // if !f.filter(i128::from(d.secs())) {
                             //     continue;
                             // }
-                            if !f.filter(usize::try_from(d.secs())?) {
+                            if !f.is_match(usize::try_from(d.secs())?) {
                                 continue;
                             }
                         }

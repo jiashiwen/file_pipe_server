@@ -105,7 +105,7 @@ pub fn analyze_folder_files_size(
             }
 
             if let Some(f) = &regex_filter {
-                if !f.filter(p) {
+                if !f.is_match(p) {
                     continue;
                 }
             }
@@ -123,7 +123,7 @@ pub fn analyze_folder_files_size(
                         .duration_since(UNIX_EPOCH)?
                         .as_secs(),
                 )?;
-                if !f.filter(modified_time) {
+                if !f.is_match(modified_time) {
                     continue;
                 }
             }
@@ -185,7 +185,7 @@ pub fn scan_folder_files_to_file(
                         .duration_since(UNIX_EPOCH)?
                         .as_secs(),
                 )?;
-                if !f.filter(modified_time) {
+                if !f.is_match(modified_time) {
                     continue;
                 }
             }

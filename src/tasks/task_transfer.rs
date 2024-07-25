@@ -607,7 +607,7 @@ impl TransferTask {
                                 line_num: list_file_position.line_num,
                             };
 
-                            if regex_filter.filter(&record.key) {
+                            if regex_filter.is_match(&record.key) {
                                 vec_keys.push(record);
                             }
                         }

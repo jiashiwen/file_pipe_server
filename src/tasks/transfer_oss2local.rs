@@ -190,6 +190,7 @@ impl TransferTaskActions for TransferOss2Local {
         let mut removed_lines = 0;
         let mut modified_lines = 0;
 
+        let reg_filter = RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         let last_modify_filter = LastModifyFilter {
             filter_type: crate::commons::LastModifyFilterType::Greater,
             timestamp,
@@ -242,8 +243,12 @@ impl TransferTaskActions for TransferOss2Local {
         let mut process_source_objects = |objects: Vec<Object>| -> Result<()> {
             for obj in objects {
                 if let Some(source_key) = obj.key() {
+                    if !reg_filter.is_match(source_key) {
+                        continue;
+                    }
+
                     if let Some(d) = obj.last_modified() {
-                        if last_modify_filter.filter(usize::try_from(d.secs())?) {
+                        if last_modify_filter.is_match(usize::try_from(d.secs())?) {
                             let target_key_str = gen_file_path(&self.target, source_key, "");
                             let record = RecordDescription {
                                 source_key: source_key.to_string(),
@@ -489,7 +494,7 @@ impl TransferTaskActions for TransferOss2Local {
                         }
                     };
 
-                    if regex_filter.filter(&record.source_key) {
+                    if regex_filter.is_match(&record.source_key) {
                         let t_file_name =
                             gen_file_path(self.target.as_str(), &record.target_key, "");
                         record.target_key = t_file_name;

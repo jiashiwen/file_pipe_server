@@ -1,8 +1,8 @@
 use super::{
     gen_file_path, task_actions::CompareTaskActions, CompareLocal2Local, CompareLocal2Oss,
-    CompareOss2Local, CompareOss2Oss, ObjectStorage, TaskDefaultParameters, TasksStatusSaver,
-    TransferStage, COMPARE_CHECK_POINT_FILE, COMPARE_RESULT_PREFIX,
-    COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX, OFFSET_PREFIX,
+    CompareOss2Local, CompareOss2Oss, ObjectStorage, TaskDefaultParameters, TransferStage,
+    COMPARE_CHECK_POINT_FILE, COMPARE_RESULT_PREFIX, COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX,
+    OFFSET_PREFIX,
 };
 use super::{get_task_checkpoint, CheckPoint, FileDescription, FilePosition, ListedRecord};
 use crate::commons::{
@@ -447,7 +447,7 @@ impl CompareTask {
                             line_num: source_list_file_position.line_num,
                         };
 
-                        if regex_filter.filter(&record.key) {
+                        if regex_filter.is_match(&record.key) {
                             vec_keys.push(record);
                         }
                     }

@@ -223,6 +223,7 @@ impl TransferTaskActions for TransferLocal2Oss {
         let mut removed_lines = 0;
         let mut modified_lines = 0;
 
+        let reg_filter = RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         let last_modify_filter = LastModifyFilter {
             filter_type: crate::commons::LastModifyFilterType::Greater,
             timestamp,
@@ -327,7 +328,7 @@ impl TransferTaskActions for TransferLocal2Oss {
                         .as_secs(),
                 )?;
 
-                if last_modify_filter.filter(modified_time) {
+                if last_modify_filter.is_match(modified_time) {
                     let record = RecordDescription {
                         source_key: p.to_string(),
                         target_key: target_key.to_string(),
@@ -427,11 +428,11 @@ impl TransferTaskActions for TransferLocal2Oss {
         let mut offset_key = OFFSET_PREFIX.to_string();
         offset_key.push_str(&subffix);
 
-        let executed_file = FileDescription {
-            path: local_notify.notify_file_path.clone(),
-            size: 0,
-            total_lines: 0,
-        };
+        // let executed_file = FileDescription {
+        //     path: local_notify.notify_file_path.clone(),
+        //     size: 0,
+        //     total_lines: 0,
+        // };
 
         // let task_status_saver = TaskStatusSaver {
         //     check_point_path: assistant.lock().await.check_point_path.clone(),
@@ -518,7 +519,7 @@ impl TransferTaskActions for TransferLocal2Oss {
                         .await
                     {
                         Ok(r) => {
-                            if regex_filter.filter(&r.source_key) {
+                            if regex_filter.is_match(&r.source_key) {
                                 records.push(r);
                             }
                         }

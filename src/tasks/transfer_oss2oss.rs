@@ -247,6 +247,7 @@ impl TransferTaskActions for TransferOss2Oss {
         let mut removed_lines = 0;
         let mut modified_lines = 0;
 
+        let reg_filter = RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         let last_modify_filter = LastModifyFilter {
             filter_type: crate::commons::LastModifyFilterType::Greater,
             timestamp,
@@ -259,8 +260,11 @@ impl TransferTaskActions for TransferOss2Oss {
         let mut process_source_objects = |source_objects: Vec<Object>| -> Result<()> {
             for obj in source_objects {
                 if let Some(source_key) = obj.key() {
+                    if !reg_filter.is_match(source_key) {
+                        continue;
+                    }
                     if let Some(d) = obj.last_modified() {
-                        if last_modify_filter.filter(usize::try_from(d.secs())?) {
+                        if last_modify_filter.is_match(usize::try_from(d.secs())?) {
                             let mut target_key = "".to_string();
                             if let Some(p) = &self.target.prefix {
                                 target_key.push_str(p);
@@ -301,6 +305,7 @@ impl TransferTaskActions for TransferOss2Oss {
         if let Some(objects) = target_resp.object_list {
             for obj in objects {
                 if let Some(target_key) = obj.key() {
+                    //Todo 考虑source prefix
                     let mut source_key = "".to_string();
                     if let Some(p) = &self.target.prefix {
                         let key = match p.ends_with("/") {
@@ -390,6 +395,7 @@ impl TransferTaskActions for TransferOss2Oss {
             .await
             .context(format!("{}:{}", file!(), line!()))?;
         let mut source_token = source_resp.next_token;
+
         if let Some(objects) = source_resp.object_list {
             process_source_objects(objects)?;
         }
@@ -463,14 +469,14 @@ impl TransferTaskActions for TransferOss2Oss {
         };
         checkpoint.task_stage = TransferStage::Increment;
 
-        let regex_filter =
-            match RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("{:?}", e);
-                    return;
-                }
-            };
+        // let regex_filter =
+        //     match RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include) {
+        //         Ok(r) => r,
+        //         Err(e) => {
+        //             log::error!("{:?}", e);
+        //             return;
+        //         }
+        //     };
 
         let mut sleep_time = 5;
         let pd = promote_processbar("executing increment:waiting for data...");
@@ -531,9 +537,10 @@ impl TransferTaskActions for TransferOss2Oss {
                         }
                     };
 
-                    if regex_filter.filter(&record.source_key) {
-                        vec_keys.push(record);
-                    }
+                    // if regex_filter.is_match(&record.source_key) {
+                    //     vec_keys.push(record);
+                    // }
+                    vec_keys.push(record);
                 };
 
                 if vec_keys

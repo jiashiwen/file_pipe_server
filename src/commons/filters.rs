@@ -3,6 +3,9 @@ use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
+pub struct Filter {}
+
+#[derive(Debug, Clone)]
 pub struct RegexFilter {
     pub exclude_regex: Option<RegexSet>,
     pub include_regex: Option<RegexSet>,
@@ -55,7 +58,7 @@ impl RegexFilter {
         self.include_regex = Some(reg_set);
     }
 
-    pub fn filter(&self, content: &str) -> bool {
+    pub fn is_match(&self, content: &str) -> bool {
         match self.exclude_regex.clone() {
             Some(e) => {
                 return !e.is_match(content);
@@ -86,7 +89,7 @@ pub struct LastModifyFilter {
 }
 
 impl LastModifyFilter {
-    pub fn filter(&self, timestamp: usize) -> bool {
+    pub fn is_match(&self, timestamp: usize) -> bool {
         match self.filter_type {
             LastModifyFilterType::Greater => timestamp.ge(&self.timestamp),
             LastModifyFilterType::Less => timestamp.le(&self.timestamp),
