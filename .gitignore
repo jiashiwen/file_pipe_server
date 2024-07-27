@@ -15,4 +15,4 @@ config.yml
 .vscode
 **.DS_Store
 Cargo.lock
-oss_pipe_rocksdb
+rocksdb

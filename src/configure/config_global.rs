@@ -7,14 +7,16 @@ use std::fs;
 use std::path::Path;
 use std::sync::RwLock;
 
-pub static GLOBAL_NEW_CONFIG: Lazy<RwLock<Config>> = Lazy::new(|| {
+pub static GLOBAL_CONFIG: Lazy<RwLock<Config>> = Lazy::new(|| {
     let config = RwLock::new(Config::default());
     config
 });
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
     #[serde(default = "Config::http_default")]
     pub http: HttpConfig,
+    pub rocksdb: RocksDBConfig,
     pub meta_dir: String,
 }
 
@@ -23,6 +25,7 @@ impl Config {
         Self {
             http: HttpConfig::default(),
             meta_dir: "meta_dir".to_string(),
+            rocksdb: RocksDBConfig::default(),
         }
     }
 
@@ -61,6 +64,26 @@ impl HttpConfig {
     }
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct RocksDBConfig {
+    #[serde(default = "RocksDBConfig::path_default")]
+    pub path: String,
+}
+
+impl RocksDBConfig {
+    pub fn path_default() -> String {
+        "rocksdb".to_string()
+    }
+}
+
+impl Default for RocksDBConfig {
+    fn default() -> Self {
+        Self {
+            path: RocksDBConfig::path_default(),
+        }
+    }
+}
+
 pub fn generate_default_config(path: &str) -> Result<()> {
     let config = Config::default();
     let yml = serde_yaml::to_string(&config)?;
@@ -69,7 +92,7 @@ pub fn generate_default_config(path: &str) -> Result<()> {
 }
 
 pub fn set_config(path: &str) {
-    let mut global_config = GLOBAL_NEW_CONFIG.write().unwrap();
+    let mut global_config = GLOBAL_CONFIG.write().unwrap();
     if path.is_empty() {
         if Path::new("config.yml").exists() {
             let contents =
@@ -87,7 +110,7 @@ pub fn set_config(path: &str) {
 }
 
 pub fn get_config() -> Result<Config> {
-    let locked_config = GLOBAL_NEW_CONFIG.read().map_err(|e| {
+    let locked_config = GLOBAL_CONFIG.read().map_err(|e| {
         return ConfigError::from_err(e.to_string(), ConfigErrorType::UnknowErr);
     })?;
     Ok(locked_config.get_config_image())

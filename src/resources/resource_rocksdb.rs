@@ -1,5 +1,6 @@
 use crate::commons::json_to_struct;
 use crate::commons::struct_to_json_string;
+use crate::configure::get_config;
 use crate::tasks::CheckPoint;
 use crate::tasks::CompareStatus;
 use crate::tasks::Status;
@@ -20,7 +21,9 @@ pub const CF_TASK: &'static str = "cf_task";
 pub const CF_TASK_STATUS: &'static str = "cf_task_status";
 
 pub static GLOBAL_ROCKSDB: Lazy<Arc<DBWithThreadMode<MultiThreaded>>> = Lazy::new(|| {
-    let rocksdb = match init_rocksdb("oss_pipe_rocksdb") {
+    let config = get_config().unwrap();
+    // let rocksdb = match init_rocksdb("oss_pipe_rocksdb") {
+    let rocksdb = match init_rocksdb(&config.rocksdb.path) {
         Ok(db) => db,
         Err(err) => panic!("{}", err),
     };
