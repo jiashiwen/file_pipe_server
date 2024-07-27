@@ -23,6 +23,7 @@ pub static GLOBAL_TASKS_SYS_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>
         let map: DashMap<String, Arc<RwLock<JoinSet<()>>>> = DashMap::new();
         map
     });
+
 pub static GLOBAL_TASKS_EXEC_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()>>>>> =
     Lazy::new(|| {
         let map: DashMap<String, Arc<RwLock<JoinSet<()>>>> = DashMap::new();
@@ -57,7 +58,7 @@ fn init_task_runtime() -> Result<Runtime> {
     let rt = runtime::Builder::new_multi_thread()
         .worker_threads(num_cpus::get())
         .enable_all()
-        .max_io_events_per_tick(32)
+        .max_io_events_per_tick(num_cpus::get() * 3)
         .build()?;
     Ok(rt)
 }

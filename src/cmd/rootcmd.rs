@@ -1,7 +1,7 @@
 use crate::cmd::{new_config_cmd, new_start_cmd, new_stop_cmd};
 
-use crate::configure::{generate_default_config, set_config_file_path};
-use crate::configure::{get_config, get_config_file_path, get_current_config_yml, set_config};
+use crate::configure::generate_default_config;
+use crate::configure::{get_config, get_current_config_yml, set_config};
 
 use crate::httpserver;
 use crate::resources::init_resources;
@@ -47,7 +47,6 @@ lazy_static! {
         )
         .subcommand(new_stop_cmd())
         .subcommand(new_config_cmd());
-    // static ref SUBCMDS: Vec<SubCmd> = subcommands();
 }
 
 pub fn run_app() {
@@ -55,53 +54,9 @@ pub fn run_app() {
     cmd_match(&matches);
 }
 
-// pub fn run_from(args: Vec<String>) {
-//     match clap::Command::try_get_matches_from(CLIAPP.to_owned(), args.clone()) {
-//         Ok(matches) => {
-//             cmd_match(&matches);
-//         }
-//         Err(err) => {
-//             err.print().expect("Error writing Error");
-//         }
-//     };
-// }
-
-// 获取全部子命令，用于构建commandcompleter
-// pub fn all_subcommand(app: &clap::Command, beginlevel: usize, input: &mut Vec<SubCmd>) {
-//     let nextlevel = beginlevel + 1;
-//     let mut subcmds = vec![];
-//     for iterm in app.get_subcommands() {
-//         subcmds.push(iterm.get_name().to_string());
-//         if iterm.has_subcommands() {
-//             all_subcommand(iterm, nextlevel, input);
-//         } else {
-//             if beginlevel == 0 {
-//                 all_subcommand(iterm, nextlevel, input);
-//             }
-//         }
-//     }
-//     let subcommand = SubCmd {
-//         level: beginlevel,
-//         command_name: app.get_name().to_string(),
-//         subcommands: subcmds,
-//     };
-//     input.push(subcommand);
-// }
-
-// pub fn get_command_completer() -> CommandCompleter {
-//     CommandCompleter::new(SUBCMDS.to_vec())
-// }
-
-// fn subcommands() -> Vec<SubCmd> {
-//     let mut subcmds = vec![];
-//     all_subcommand(&CLIAPP.clone().borrow(), 0, &mut subcmds);
-//     subcmds
-// }
-
 fn cmd_match(matches: &ArgMatches) {
     if let Some(c) = matches.get_one::<String>("config") {
-        set_config_file_path(c.to_string());
-        set_config(&get_config_file_path());
+        set_config(c);
     } else {
         set_config("");
     }
@@ -165,22 +120,6 @@ fn cmd_match(matches: &ArgMatches) {
         rt.block_on(async { init_resources().await.unwrap() });
 
         rt.spawn(async move { init_tasks_status_server().await });
-
-        // let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-        // let async_http_server = async {
-        //     let config = get_config().unwrap();
-        //     let bind = config.http.bind;
-        //     let port = config.http.port;
-
-        //     let mut http_server = httpserver::HttpServer::default().await;
-        //     let ip = IpAddr::from_str(&bind).unwrap();
-        //     let addr = net::SocketAddr::from((ip, port));
-
-        //     http_server.listener = TcpListener::bind(addr).await.unwrap();
-
-        //     let http_handler = http_server.run().await;
-        //     let _http = tokio::join!(http_handler);
-        // };
 
         let async_http_server = async {
             let config = get_config().unwrap();
