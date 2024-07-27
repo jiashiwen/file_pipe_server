@@ -61,15 +61,6 @@ impl HttpConfig {
     }
 }
 
-impl HttpConfig {
-    pub fn default() -> Self {
-        Self {
-            port: 3000,
-            bind: "0.0.0.0".to_string(),
-        }
-    }
-}
-
 pub fn generate_default_config(path: &str) -> Result<()> {
     let config = Config::default();
     let yml = serde_yaml::to_string(&config)?;
