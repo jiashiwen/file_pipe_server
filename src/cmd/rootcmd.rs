@@ -164,7 +164,7 @@ fn cmd_match(matches: &ArgMatches) {
                         println!("kill !");
                         exit(1);
                     }
-                    term_sig => {
+                    _term_sig => {
                         eprintln!("Terminating......");
                         // do some before exit
                         exit(0)

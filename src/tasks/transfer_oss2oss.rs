@@ -457,7 +457,6 @@ impl TransferTaskActions for TransferOss2Oss {
         stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         // 循环执行获取lastmodify 大于checkpoint指定的时间戳的对象
         let mut checkpoint = match get_checkpoint(&self.task_id) {
@@ -469,20 +468,11 @@ impl TransferTaskActions for TransferOss2Oss {
         };
         checkpoint.task_stage = TransferStage::Increment;
 
-        // let regex_filter =
-        //     match RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include) {
-        //         Ok(r) => r,
-        //         Err(e) => {
-        //             log::error!("{:?}", e);
-        //             return;
-        //         }
-        //     };
-
         let mut sleep_time = 5;
         let pd = promote_processbar("executing increment:waiting for data...");
         let mut finished_total_objects = 0;
 
-        while !snapshot_stop_mark.load(std::sync::atomic::Ordering::SeqCst)
+        while !stop_mark.load(std::sync::atomic::Ordering::SeqCst)
             && self
                 .attributes
                 .max_errors
@@ -537,9 +527,6 @@ impl TransferTaskActions for TransferOss2Oss {
                         }
                     };
 
-                    // if regex_filter.is_match(&record.source_key) {
-                    //     vec_keys.push(record);
-                    // }
                     vec_keys.push(record);
                 };
 
@@ -618,7 +605,7 @@ impl TransferTaskActions for TransferOss2Oss {
                 line_num: modified.total_lines,
             };
             checkpoint.executing_file = modified.clone();
-            // checkpoint.task_begin_timestamp = i128::from(now.as_secs());
+
             checkpoint.task_begin_timestamp = match usize::try_from(now.as_secs()) {
                 Ok(b_t) => b_t,
                 Err(e) => {
@@ -627,7 +614,6 @@ impl TransferTaskActions for TransferOss2Oss {
                 }
             };
 
-            // let _ = checkpoint.save_to(&checkpoint_path);
             let _ = checkpoint.save_to_rocksdb_cf();
 
             //递增等待时间

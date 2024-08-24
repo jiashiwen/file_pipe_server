@@ -347,12 +347,12 @@ impl TransferTaskActions for TransferLocal2Local {
     async fn execute_increment(
         &self,
         _execute_set: Arc<RwLock<JoinSet<()>>>,
-        executing_transfers: Arc<RwLock<usize>>,
+        _executing_transfers: Arc<RwLock<usize>>,
         assistant: Arc<Mutex<IncrementAssistant>>,
         stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        snapshot_stop_mark: Arc<AtomicBool>,
+        // snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         let lock = assistant.lock().await;
         let local_notify = match lock.local_notify.clone() {
@@ -361,11 +361,6 @@ impl TransferTaskActions for TransferLocal2Local {
         };
         drop(lock);
 
-        let executed_file = FileDescription {
-            path: local_notify.notify_file_path.clone(),
-            size: 0,
-            total_lines: 0,
-        };
         let file_position = FilePosition::default();
 
         let mut offset = match TryInto::<u64>::try_into(file_position.offset) {
@@ -426,7 +421,7 @@ impl TransferTaskActions for TransferLocal2Local {
                 .max_errors
                 .le(&err_counter.load(std::sync::atomic::Ordering::Relaxed))
             {
-                snapshot_stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+                stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
                 return;
             }
 

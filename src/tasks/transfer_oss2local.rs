@@ -397,7 +397,7 @@ impl TransferTaskActions for TransferOss2Local {
         stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        snapshot_stop_mark: Arc<AtomicBool>,
+        // snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         // 循环执行获取lastmodify 大于checkpoint指定的时间戳的对象
         // let lock = assistant.lock().await;
@@ -440,7 +440,7 @@ impl TransferTaskActions for TransferOss2Local {
         let pd = promote_processbar("executing increment:waiting for data...");
         let mut finished_total_objects = 0;
 
-        while !snapshot_stop_mark.load(std::sync::atomic::Ordering::SeqCst)
+        while !stop_mark.load(std::sync::atomic::Ordering::SeqCst)
             && self
                 .attributes
                 .max_errors

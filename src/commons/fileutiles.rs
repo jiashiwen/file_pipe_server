@@ -297,6 +297,7 @@ pub fn merge_file<P: AsRef<Path>>(file: P, merge_to: P, chunk_size: usize) -> Re
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn merge_files(filename: &str, chunk_size: usize, file_parts: Vec<String>) -> Result<()> {
     let merged_path = Path::new(filename);
     if let Some(p) = merged_path.parent() {
@@ -472,7 +473,6 @@ mod test {
     #[test]
     fn test_gen_file() {
         let _ = generate_file(128, 8, "/tmp/gen/gen_file");
-        // println!("test scan result {:?}", r);
     }
 
     //cargo test commons::fileutiles::test::test_multi_parts_copy_file -- --nocapture

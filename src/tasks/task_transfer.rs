@@ -726,7 +726,7 @@ impl TransferTask {
                     stop_mark.clone(),
                     Arc::clone(&err_counter),
                     Arc::clone(&offset_map),
-                    stop_mark.clone(),
+                    // stop_mark.clone(),
                 )
                 .await;
             // 配置停止 offset save 标识为 true
