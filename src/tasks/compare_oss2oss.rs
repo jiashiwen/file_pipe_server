@@ -208,10 +208,6 @@ impl Oss2OssRecordsComparator {
                     true => {}
                     false => return Err(service_err.into()),
                 }
-                // match service_err.kind {
-                //     GetObjectErrorKind::NoSuchKey(_) => {}
-                //     _ => return Err(service_err.into()),
-                // }
             }
         };
 
@@ -230,12 +226,6 @@ impl Oss2OssRecordsComparator {
                     true => {}
                     false => return Err(service_err.into()),
                 }
-
-                // let service_err = e.into_service_error();
-                // match service_err.kind {
-                //     GetObjectErrorKind::NoSuchKey(_) => {}
-                //     _ => return Err(service_err.into()),
-                // }
             }
         };
 

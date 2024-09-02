@@ -74,8 +74,10 @@ impl FromStr for RecordDescription {
 }
 
 impl RecordDescription {
+    //Todo 新增stop_mark 参数，在err_count 达到阈值时变更stop_mark
     pub fn handle_error(
         &self,
+        // stop_mark: Arc<AtomicBool>,
         err_counter: &Arc<AtomicUsize>,
         offset_map: &Arc<DashMap<String, FilePosition>>,
         save_to: &mut File,
@@ -86,6 +88,15 @@ impl RecordDescription {
             self.list_file_position.clone(),
         );
         err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        // err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        // if err_counter
+        //     .load(std::sync::atomic::Ordering::SeqCst)
+        //     .ge(&max_errors)
+        // {
+        //     stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+        // }
+
         let _ = self.save_json_to_file(save_to);
     }
 

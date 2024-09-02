@@ -376,22 +376,6 @@ impl TransferTaskActions for TransferLocal2Local {
         let mut offset_key = OFFSET_PREFIX.to_string();
         offset_key.push_str(&subffix);
 
-        // 启动 checkpoint 记录器
-        // let task_status_saver = TaskStatusSaver {
-        //     check_point_path: assistant.lock().await.check_point_path.clone(),
-        //     executed_file,
-        //     stop_mark: Arc::clone(&snapshot_stop_mark),
-        //     list_file_positon_map: Arc::clone(&offset_map),
-        //     file_for_notify: Some(local_notify.notify_file_path.clone()),
-        //     task_stage: TransferStage::Increment,
-        //     interval: 3,
-        // };
-
-        // let task_id = self.task_id.clone();
-        // task::spawn(async move {
-        //     task_status_saver.snapshot_to_file(task_id).await;
-        // });
-
         let error_file_name = gen_file_path(
             &self.attributes.meta_dir,
             TRANSFER_ERROR_RECORD_PREFIX,

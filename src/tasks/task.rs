@@ -537,6 +537,7 @@ pub fn clean_task(task_id: &str) -> Result<()> {
     // let _ = fs::remove_dir(self.meta_dir());
     Ok(())
 }
+
 pub fn task_id_generator() -> i64 {
     let mut id_generator_generator = SnowflakeIdGenerator::new(1, 1);
     let id = id_generator_generator.real_time_generate();

@@ -410,7 +410,6 @@ impl TransferTaskActions for TransferLocal2Oss {
         stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        // snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         let lock = assistant.lock().await;
         let local_notify = match lock.local_notify.clone() {
