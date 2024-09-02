@@ -76,7 +76,11 @@ impl TransferTaskActions for TransferOss2Local {
             )
             .await
     }
-    fn error_record_retry(&self, executing_transfers: Arc<RwLock<usize>>) -> Result<()> {
+    fn error_record_retry(
+        &self,
+        stop_mark: Arc<AtomicBool>,
+        executing_transfers: Arc<RwLock<usize>>,
+    ) -> Result<()> {
         // 遍历错误记录
         // 每个错误文件重新处理
         for entry in WalkDir::new(self.attributes.meta_dir.as_str())
@@ -696,6 +700,7 @@ impl Oss2LocalListedRecordsExecutor {
                     option: Opt::PUT,
                 };
                 record_desc.handle_error(
+                    &self.stop_mark,
                     &self.err_counter,
                     &self.offset_map,
                     &mut error_file,
@@ -839,6 +844,7 @@ impl Oss2LocalListedRecordsExecutor {
             {
                 log::error!("{}", e);
                 record.handle_error(
+                    &self.stop_mark,
                     &self.err_counter,
                     &self.offset_map,
                     &mut error_file,

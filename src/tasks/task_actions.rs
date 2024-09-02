@@ -23,7 +23,12 @@ use tokio::{
 pub trait TransferTaskActions {
     async fn analyze_source(&self) -> Result<BTreeMap<String, i128>>;
     // 错误记录重试
-    fn error_record_retry(&self, executing_transfers: Arc<RwLock<usize>>) -> Result<()>;
+    fn error_record_retry(
+        &self,
+        stop_mark: Arc<AtomicBool>,
+        executing_transfers: Arc<RwLock<usize>>,
+    ) -> Result<()>;
+
     // 记录列表执行器
     async fn listed_records_transfor(
         &self,

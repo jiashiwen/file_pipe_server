@@ -366,7 +366,7 @@ impl TransferTask {
             let checkpoint = get_checkpoint(&self.task_id)?;
 
             // 执行error retry
-            task.error_record_retry(executing_transfers)?;
+            task.error_record_retry(stop_mark.clone(), executing_transfers)?;
 
             executed_file = checkpoint.executing_file.clone();
 

@@ -77,7 +77,11 @@ impl TransferTaskActions for TransferOss2Oss {
             .await
     }
     // 错误记录重试
-    fn error_record_retry(&self, executing_transfers: Arc<RwLock<usize>>) -> Result<()> {
+    fn error_record_retry(
+        &self,
+        stop_mark: Arc<AtomicBool>,
+        executing_transfers: Arc<RwLock<usize>>,
+    ) -> Result<()> {
         // 遍历错误记录
         for entry in WalkDir::new(self.attributes.meta_dir.as_str())
             .into_iter()
@@ -760,6 +764,7 @@ impl TransferOss2OssRecordsExecutor {
                     option: Opt::PUT,
                 };
                 recorddesc.handle_error(
+                    &self.stop_mark,
                     &self.err_counter,
                     &self.offset_map,
                     &mut error_file,
@@ -915,6 +920,7 @@ impl TransferOss2OssRecordsExecutor {
             {
                 log::error!("{}", e);
                 record.handle_error(
+                    &self.stop_mark,
                     &self.err_counter,
                     &self.offset_map,
                     &mut error_file,

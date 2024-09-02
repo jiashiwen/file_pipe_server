@@ -84,9 +84,9 @@ impl CompareTaskActions for CompareOss2Oss {
 pub struct Oss2OssRecordsComparator {
     pub source: OSSDescription,
     pub target: OSSDescription,
+    pub stop_mark: Arc<AtomicBool>,
     pub err_counter: Arc<AtomicUsize>,
     pub offset_map: Arc<DashMap<String, FilePosition>>,
-    pub stop_mark: Arc<AtomicBool>,
     pub check_option: CompareCheckOption,
     pub attributes: CompareTaskAttributes,
     pub list_file_path: String,
@@ -156,6 +156,7 @@ impl Oss2OssRecordsComparator {
                         option: Opt::PUT,
                     };
                     recorddesc.handle_error(
+                        &self.stop_mark,
                         &self.err_counter,
                         &self.offset_map,
                         &mut error_file,

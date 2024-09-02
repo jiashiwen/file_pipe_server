@@ -54,7 +54,11 @@ impl TransferTaskActions for TransferLocal2Local {
         )
     }
 
-    fn error_record_retry(&self, executing_transfers: Arc<RwLock<usize>>) -> Result<()> {
+    fn error_record_retry(
+        &self,
+        stop_mark: Arc<AtomicBool>,
+        executing_transfers: Arc<RwLock<usize>>,
+    ) -> Result<()> {
         // 遍历meta dir 执行所有err开头文件
         for entry in WalkDir::new(self.attributes.meta_dir.as_str())
             .into_iter()
@@ -92,6 +96,7 @@ impl TransferTaskActions for TransferLocal2Local {
                         let local2local = Local2LocalExecutor {
                             source: self.source.clone(),
                             target: self.target.clone(),
+                            stop_mark: stop_mark.clone(),
                             err_counter: Arc::new(AtomicUsize::new(0)),
                             offset_map: Arc::new(DashMap::<String, FilePosition>::new()),
                             attributes: self.attributes.clone(),
@@ -109,7 +114,6 @@ impl TransferTaskActions for TransferLocal2Local {
 
     async fn listed_records_transfor(
         &self,
-        // execute_set: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         _executing_transfers: Arc<RwLock<usize>>,
         records: Vec<ListedRecord>,
@@ -121,6 +125,7 @@ impl TransferTaskActions for TransferLocal2Local {
         let local2local = Local2LocalExecutor {
             source: self.source.clone(),
             target: self.target.clone(),
+            stop_mark: stop_mark.clone(),
             err_counter,
             offset_map,
             attributes: self.attributes.clone(),
@@ -149,6 +154,7 @@ impl TransferTaskActions for TransferLocal2Local {
         let local2local = Local2LocalExecutor {
             source: self.source.clone(),
             target: self.target.clone(),
+            stop_mark: stop_mark.clone(),
             err_counter,
             offset_map,
             attributes: self.attributes.clone(),
@@ -352,7 +358,6 @@ impl TransferTaskActions for TransferLocal2Local {
         stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        // snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         let lock = assistant.lock().await;
         let local_notify = match lock.local_notify.clone() {
@@ -470,6 +475,7 @@ impl TransferTaskActions for TransferLocal2Local {
                                 option: Opt::UNKOWN,
                             };
                             r.handle_error(
+                                &stop_mark,
                                 &err_counter,
                                 &offset_map,
                                 &mut error_file,
@@ -485,6 +491,7 @@ impl TransferTaskActions for TransferLocal2Local {
                 let copy = Local2LocalExecutor {
                     source: self.source.clone(),
                     target: self.target.clone(),
+                    stop_mark: stop_mark.clone(),
                     err_counter: Arc::clone(&err_counter),
                     offset_map: Arc::clone(&offset_map),
                     attributes: self.attributes.clone(),
@@ -577,6 +584,7 @@ impl TransferLocal2Local {
 pub struct Local2LocalExecutor {
     pub source: String,
     pub target: String,
+    pub stop_mark: Arc<AtomicBool>,
     pub err_counter: Arc<AtomicUsize>,
     pub offset_map: Arc<DashMap<String, FilePosition>>,
     pub attributes: TransferTaskAttributes,
@@ -631,6 +639,7 @@ impl Local2LocalExecutor {
                     option: Opt::PUT,
                 };
                 recorddesc.handle_error(
+                    &self.stop_mark,
                     &self.err_counter,
                     &self.offset_map,
                     &mut error_file,
@@ -705,6 +714,7 @@ impl Local2LocalExecutor {
         for record in records {
             if let Err(e) = self.record_description_handler(&record).await {
                 record.handle_error(
+                    &self.stop_mark,
                     &self.err_counter,
                     &self.offset_map,
                     &mut error_file,

@@ -5,7 +5,10 @@ use std::{
     fs::File,
     io::Write,
     str::FromStr,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    },
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -77,7 +80,7 @@ impl RecordDescription {
     //Todo 新增stop_mark 参数，在err_count 达到阈值时变更stop_mark
     pub fn handle_error(
         &self,
-        // stop_mark: Arc<AtomicBool>,
+        stop_mark: &Arc<AtomicBool>,
         err_counter: &Arc<AtomicUsize>,
         offset_map: &Arc<DashMap<String, FilePosition>>,
         save_to: &mut File,
