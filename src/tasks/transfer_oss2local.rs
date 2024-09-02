@@ -160,7 +160,8 @@ impl TransferTaskActions for TransferOss2Local {
 
     async fn changed_object_capture_based_target(
         &self,
-        timestamp: usize,
+        // timestamp: usize,
+        timestamp: u64,
     ) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let removed = gen_file_path(
@@ -254,7 +255,8 @@ impl TransferTaskActions for TransferOss2Local {
                     }
 
                     if let Some(d) = obj.last_modified() {
-                        if last_modify_filter.is_match(usize::try_from(d.secs())?) {
+                        // if last_modify_filter.is_match(usize::try_from(d.secs())?) {
+                        if last_modify_filter.is_match(u64::try_from(d.secs())?) {
                             let target_key_str = gen_file_path(&self.target, source_key, "");
                             let record = RecordDescription {
                                 source_key: source_key.to_string(),

@@ -41,9 +41,9 @@ pub struct CheckPoint {
     pub file_for_notify: Option<String>,
     pub task_stage: TransferStage,
     // 记录 checkpoint 时点的时间戳
-    pub modify_checkpoint_timestamp: usize,
+    pub modify_checkpoint_timestamp: u64,
     // 任务起始时间戳，用于后续增量任务
-    pub task_begin_timestamp: usize,
+    pub task_begin_timestamp: u64,
 }
 
 impl Default for CheckPoint {
@@ -80,7 +80,8 @@ impl CheckPoint {
     }
     pub fn save_to(&mut self, path: &str) -> Result<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-        self.modify_checkpoint_timestamp = usize::try_from(now.as_secs())?;
+        // self.modify_checkpoint_timestamp = usize::try_from(now.as_secs())?;
+        self.modify_checkpoint_timestamp = now.as_secs();
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -95,7 +96,8 @@ impl CheckPoint {
     pub fn save_to_file(&mut self, file: &mut File) -> Result<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         // self.modify_checkpoint_timestamp = i128::from(now.as_secs());
-        self.modify_checkpoint_timestamp = usize::try_from(now.as_secs())?;
+        // self.modify_checkpoint_timestamp = usize::try_from(now.as_secs())?;
+        self.modify_checkpoint_timestamp = now.as_secs();
         let constent = struct_to_yaml_string(self)?;
         file.write_all(constent.as_bytes())?;
         file.flush()?;
@@ -105,7 +107,8 @@ impl CheckPoint {
     pub fn save_to_rocksdb_cf(&mut self) -> Result<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         // self.modify_checkpoint_timestamp = i128::from(now.as_secs());
-        self.modify_checkpoint_timestamp = usize::try_from(now.as_secs())?;
+        // self.modify_checkpoint_timestamp = usize::try_from(now.as_secs())?;
+        self.modify_checkpoint_timestamp = now.as_secs();
         let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK_CHECKPOINTS) {
             Some(cf) => cf,
             None => return Err(anyhow!("content length is None")),

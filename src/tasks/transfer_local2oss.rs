@@ -203,10 +203,7 @@ impl TransferTaskActions for TransferLocal2Oss {
         )
     }
 
-    async fn changed_object_capture_based_target(
-        &self,
-        timestamp: usize,
-    ) -> Result<FileDescription> {
+    async fn changed_object_capture_based_target(&self, timestamp: u64) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let removed = gen_file_path(
             &self.attributes.meta_dir,

@@ -223,7 +223,8 @@ impl TransferTaskActions for TransferOss2Oss {
 
     async fn changed_object_capture_based_target(
         &self,
-        timestamp: usize,
+        // timestamp: usize,
+        timestamp: u64,
     ) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let removed = gen_file_path(
@@ -270,7 +271,8 @@ impl TransferTaskActions for TransferOss2Oss {
                         continue;
                     }
                     if let Some(d) = obj.last_modified() {
-                        if last_modify_filter.is_match(usize::try_from(d.secs())?) {
+                        // if last_modify_filter.is_match(usize::try_from(d.secs())?) {
+                        if last_modify_filter.is_match(u64::try_from(d.secs())?) {
                             let mut target_key = "".to_string();
                             if let Some(p) = &self.target.prefix {
                                 target_key.push_str(p);
@@ -612,13 +614,15 @@ impl TransferTaskActions for TransferOss2Oss {
             };
             checkpoint.executing_file = modified.clone();
 
-            checkpoint.task_begin_timestamp = match usize::try_from(now.as_secs()) {
-                Ok(b_t) => b_t,
-                Err(e) => {
-                    log::error!("{}", e);
-                    continue;
-                }
-            };
+            // checkpoint.task_begin_timestamp = match usize::try_from(now.as_secs()) {
+            //     Ok(b_t) => b_t,
+            //     Err(e) => {
+            //         log::error!("{}", e);
+            //         continue;
+            //     }
+            // };
+
+            checkpoint.task_begin_timestamp = now.as_secs();
 
             let _ = checkpoint.save_to_rocksdb_cf();
 

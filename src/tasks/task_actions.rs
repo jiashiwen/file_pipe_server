@@ -68,7 +68,9 @@ pub trait TransferTaskActions {
     // Todo 增加正则过滤器
     async fn changed_object_capture_based_target(
         &self,
-        timestamp: usize,
+        // regex_filter: Option<RegexFilter>,
+        // timestamp: usize,
+        timestamp: u64,
     ) -> Result<FileDescription>;
 
     // 执行增量前置操作，例如启动notify线程，记录last modify 时间戳等

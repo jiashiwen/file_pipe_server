@@ -185,7 +185,8 @@ impl TransferTaskActions for TransferLocal2Local {
 
     async fn changed_object_capture_based_target(
         &self,
-        timestamp: usize,
+        // timestamp: usize,
+        timestamp: u64,
     ) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         // 获取target object 列表 和removed 列表

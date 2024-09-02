@@ -81,11 +81,12 @@ pub enum LastModifyFilterType {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct LastModifyFilter {
     pub filter_type: LastModifyFilterType,
-    pub timestamp: usize,
+    // pub timestamp: usize,
+    pub timestamp: u64,
 }
 
 impl LastModifyFilter {
-    pub fn is_match(&self, timestamp: usize) -> bool {
+    pub fn is_match(&self, timestamp: u64) -> bool {
         match self.filter_type {
             LastModifyFilterType::Greater => timestamp.ge(&self.timestamp),
             LastModifyFilterType::Less => timestamp.le(&self.timestamp),

@@ -96,7 +96,10 @@ impl OssClient {
 
                 if let Some(ref f) = last_modify_filter {
                     if let Some(d) = obj.last_modified() {
-                        if !f.is_match(usize::try_from(d.secs())?) {
+                        // if !f.is_match(usize::try_from(d.secs())?) {
+                        //     continue;
+                        // }
+                        if !f.is_match(u64::try_from(d.secs())?) {
                             continue;
                         }
                     }
@@ -899,10 +902,11 @@ impl OssClient {
 
                 if let Some(f) = last_modify_filter {
                     if let Some(d) = obj.last_modified() {
-                        // if !f.filter(i128::from(d.secs())) {
+                        // if !f.is_match(usize::try_from(d.secs())?) {
                         //     continue;
                         // }
-                        if !f.is_match(usize::try_from(d.secs())?) {
+
+                        if !f.is_match(u64::try_from(d.secs())?) {
                             continue;
                         }
                     }
@@ -951,10 +955,7 @@ impl OssClient {
 
                     if let Some(f) = last_modify_filter {
                         if let Some(d) = obj.last_modified() {
-                            // if !f.filter(i128::from(d.secs())) {
-                            //     continue;
-                            // }
-                            if !f.is_match(usize::try_from(d.secs())?) {
+                            if !f.is_match(u64::try_from(d.secs())?) {
                                 continue;
                             }
                         }
