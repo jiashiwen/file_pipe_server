@@ -68,8 +68,7 @@ pub trait TransferTaskActions {
     // Todo 增加正则过滤器
     async fn changed_object_capture_based_target(
         &self,
-        // regex_filter: Option<RegexFilter>,
-        // timestamp: usize,
+        regex_filter: Option<RegexFilter>,
         timestamp: u64,
     ) -> Result<FileDescription>;
 

@@ -203,7 +203,11 @@ impl TransferTaskActions for TransferLocal2Oss {
         )
     }
 
-    async fn changed_object_capture_based_target(&self, timestamp: u64) -> Result<FileDescription> {
+    async fn changed_object_capture_based_target(
+        &self,
+        regex_filter: Option<RegexFilter>,
+        timestamp: u64,
+    ) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let removed = gen_file_path(
             &self.attributes.meta_dir,
@@ -232,7 +236,7 @@ impl TransferTaskActions for TransferLocal2Oss {
         let mut removed_lines = 0;
         let mut modified_lines = 0;
 
-        let reg_filter = RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
+        // let reg_filter = RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         let last_modify_filter = LastModifyFilter {
             filter_type: crate::commons::LastModifyFilterType::Greater,
             timestamp,
@@ -323,19 +327,24 @@ impl TransferTaskActions for TransferLocal2Oss {
                 }
                 target_key.push_str(key);
 
-                // let modified_time = entry
-                //     .metadata()?
-                //     .modified()?
-                //     .duration_since(UNIX_EPOCH)?
-                //     .as_secs();
+                if let Some(ref f) = regex_filter {
+                    if !f.is_match(p) {
+                        continue;
+                    }
+                }
 
-                let modified_time = TryFrom::try_from(
-                    entry
-                        .metadata()?
-                        .modified()?
-                        .duration_since(UNIX_EPOCH)?
-                        .as_secs(),
-                )?;
+                // let modified_time = TryFrom::try_from(
+                //     entry
+                //         .metadata()?
+                //         .modified()?
+                //         .duration_since(UNIX_EPOCH)?
+                //         .as_secs(),
+                // )?;
+                let modified_time = entry
+                    .metadata()?
+                    .modified()?
+                    .duration_since(UNIX_EPOCH)?
+                    .as_secs();
 
                 if last_modify_filter.is_match(modified_time) {
                     let record = RecordDescription {

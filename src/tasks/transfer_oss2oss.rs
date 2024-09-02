@@ -223,6 +223,7 @@ impl TransferTaskActions for TransferOss2Oss {
 
     async fn changed_object_capture_based_target(
         &self,
+        regex_filter: Option<RegexFilter>,
         // timestamp: usize,
         timestamp: u64,
     ) -> Result<FileDescription> {
@@ -480,6 +481,15 @@ impl TransferTaskActions for TransferOss2Oss {
         // let pd = promote_processbar("executing increment:waiting for data...");
         let mut finished_total_objects = 0;
 
+        let regex_filter =
+            match RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include) {
+                Ok(r) => r,
+                Err(e) => {
+                    log::error!("{}", e);
+                    return;
+                }
+            };
+
         while !stop_mark.load(std::sync::atomic::Ordering::SeqCst)
             && self
                 .attributes
@@ -488,7 +498,10 @@ impl TransferTaskActions for TransferOss2Oss {
         {
             let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
             let modified = match self
-                .changed_object_capture_based_target(checkpoint.task_begin_timestamp)
+                .changed_object_capture_based_target(
+                    Some(regex_filter.clone()),
+                    checkpoint.task_begin_timestamp,
+                )
                 .await
             {
                 Ok(f) => f,

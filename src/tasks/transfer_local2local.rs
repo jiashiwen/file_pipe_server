@@ -186,6 +186,7 @@ impl TransferTaskActions for TransferLocal2Local {
     async fn changed_object_capture_based_target(
         &self,
         // timestamp: usize,
+        regex_filter: Option<RegexFilter>,
         timestamp: u64,
     ) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
@@ -233,6 +234,12 @@ impl TransferTaskActions for TransferLocal2Local {
             if let Some(p) = entry.path().to_str() {
                 if p.eq(&self.target) {
                     continue;
+                }
+
+                if let Some(ref f) = regex_filter {
+                    if !f.is_match(p) {
+                        continue;
+                    }
                 }
 
                 let key = match &self.target.ends_with("/") {

@@ -395,7 +395,10 @@ impl TransferTask {
                     // 流程逻辑
                     // 扫描target 文件list-> 抓取自扫描时间开始，源端的变动数据 -> 生成objlist，action 新增target change capture
                     let modified: FileDescription = task
-                        .changed_object_capture_based_target(checkpoint.task_begin_timestamp)
+                        .changed_object_capture_based_target(
+                            Some(regex_filter.clone()),
+                            checkpoint.task_begin_timestamp,
+                        )
                         .await?;
                     list_file = Some(File::open(&modified.path)?);
                     exec_modified = true;

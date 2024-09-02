@@ -160,7 +160,7 @@ impl TransferTaskActions for TransferOss2Local {
 
     async fn changed_object_capture_based_target(
         &self,
-        // timestamp: usize,
+        regex_filter: Option<RegexFilter>,
         timestamp: u64,
     ) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
@@ -455,7 +455,10 @@ impl TransferTaskActions for TransferOss2Local {
                 .ge(&err_counter.load(std::sync::atomic::Ordering::SeqCst))
         {
             let modified = match self
-                .changed_object_capture_based_target(checkpoint.modify_checkpoint_timestamp)
+                .changed_object_capture_based_target(
+                    Some(regex_filter.clone()),
+                    checkpoint.modify_checkpoint_timestamp,
+                )
                 .await
             {
                 Ok(f) => f,
