@@ -370,7 +370,10 @@ impl CompareTask {
             } else {
                 // 清理 meta 目录
                 let _ = fs::remove_dir_all(self.attributes.meta_dir.as_str());
-                match task.gen_list_file(None, &compare_source_list.path).await {
+                match task
+                    .gen_list_file(Some(regex_filter.clone()), None, &compare_source_list.path)
+                    .await
+                {
                     Ok(f) => {
                         compare_source_list = f;
                     }

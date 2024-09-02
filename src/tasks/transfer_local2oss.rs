@@ -162,7 +162,6 @@ impl TransferTaskActions for TransferLocal2Oss {
 
     async fn record_descriptions_transfor(
         &self,
-        // joinset: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         _executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
@@ -192,10 +191,16 @@ impl TransferTaskActions for TransferLocal2Oss {
     // 生成对象列表
     async fn gen_source_object_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription> {
-        scan_folder_files_to_file(self.source.as_str(), &object_list_file, last_modify_filter)
+        scan_folder_files_to_file(
+            self.source.as_str(),
+            &object_list_file,
+            regex_filter,
+            last_modify_filter,
+        )
     }
 
     async fn changed_object_capture_based_target(
@@ -526,6 +531,7 @@ impl TransferTaskActions for TransferLocal2Oss {
                             r.handle_error(
                                 &stop_mark,
                                 &err_counter,
+                                self.attributes.max_errors,
                                 &offset_map,
                                 &mut error_file,
                                 offset_key.as_str(),
@@ -703,6 +709,7 @@ impl Local2OssExecuter {
                 record_desc.handle_error(
                     &self.stop_mark,
                     &self.err_counter,
+                    self.attributes.max_errors,
                     &self.offset_map,
                     &mut error_file,
                     offset_key.as_str(),
@@ -822,6 +829,7 @@ impl Local2OssExecuter {
                         record.handle_error(
                             &self.stop_mark,
                             &self.err_counter,
+                            self.attributes.max_errors,
                             &self.offset_map,
                             &mut error_file,
                             offset_key.as_str(),
@@ -863,6 +871,7 @@ impl Local2OssExecuter {
                 record.handle_error(
                     &self.stop_mark,
                     &self.err_counter,
+                    self.attributes.max_errors,
                     &self.offset_map,
                     &mut error_file,
                     offset_key.as_str(),

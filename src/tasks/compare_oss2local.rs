@@ -4,7 +4,7 @@ use super::{
     ObjectDiff, Opt, RecordDescription, COMPARE_ERROR_RECORD_PREFIX, COMPARE_RESULT_PREFIX,
     OFFSET_PREFIX,
 };
-use crate::commons::LastModifyFilter;
+use crate::commons::{LastModifyFilter, RegexFilter};
 use crate::s3::{OSSDescription, OssClient};
 use anyhow::anyhow;
 use anyhow::Result;
@@ -39,6 +39,7 @@ pub struct CompareOss2Local {
 impl CompareTaskActions for CompareOss2Local {
     async fn gen_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription> {
@@ -49,6 +50,7 @@ impl CompareTaskActions for CompareOss2Local {
                 self.source.prefix.clone(),
                 self.attributes.objects_per_batch,
                 object_list_file,
+                regex_filter,
                 last_modify_filter,
             )
             .await
@@ -154,6 +156,7 @@ impl Oss2LocalRecordsComparator {
                     recorddesc.handle_error(
                         &self.stop_mark,
                         &self.err_counter,
+                        self.attributes.max_errors,
                         &self.offset_map,
                         &mut error_file,
                         offset_key.as_str(),

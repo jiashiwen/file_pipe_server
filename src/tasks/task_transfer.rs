@@ -407,6 +407,7 @@ impl TransferTask {
             let _ = fs::remove_dir_all(self.attributes.meta_dir.as_str());
             executed_file = task
                 .gen_source_object_list_file(
+                    Some(regex_filter.clone()),
                     self.attributes.last_modify_filter,
                     &executed_file.path,
                 )
@@ -607,9 +608,10 @@ impl TransferTask {
                                 line_num: list_file_position.line_num,
                             };
 
-                            if regex_filter.is_match(&record.key) {
-                                vec_keys.push(record);
-                            }
+                            // if regex_filter.is_match(&record.key) {
+                            //     vec_keys.push(record);
+                            // }
+                            vec_keys.push(record);
                         }
                     };
 

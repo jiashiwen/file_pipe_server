@@ -140,6 +140,7 @@ impl TransferTaskActions for TransferOss2Local {
 
     async fn gen_source_object_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription> {
@@ -151,6 +152,7 @@ impl TransferTaskActions for TransferOss2Local {
                 self.source.prefix.clone(),
                 self.attributes.objects_per_batch,
                 object_list_file,
+                regex_filter,
                 last_modify_filter,
             )
             .await
@@ -702,6 +704,7 @@ impl Oss2LocalListedRecordsExecutor {
                 record_desc.handle_error(
                     &self.stop_mark,
                     &self.err_counter,
+                    self.attributes.max_errors,
                     &self.offset_map,
                     &mut error_file,
                     offset_key.as_str(),
@@ -846,6 +849,7 @@ impl Oss2LocalListedRecordsExecutor {
                 record.handle_error(
                     &self.stop_mark,
                     &self.err_counter,
+                    self.attributes.max_errors,
                     &self.offset_map,
                     &mut error_file,
                     offset_key.as_str(),

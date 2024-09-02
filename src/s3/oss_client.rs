@@ -60,6 +60,7 @@ impl OssClient {
         prefix: Option<String>,
         batch: i32,
         file_path: &str,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
     ) -> Result<FileDescription> {
         let mut total_lines = 0;
@@ -80,22 +81,53 @@ impl OssClient {
             .await?;
         let mut token = resp.next_token;
 
-        if let Some(objects) = resp.object_list {
-            for item in objects {
-                if let Some(f) = last_modify_filter {
-                    if let Some(d) = item.last_modified() {
+        let mut write_objects_to_file = |objects: Vec<Object>| -> Result<()> {
+            for obj in objects {
+                if let Some(ref f) = regex_filter {
+                    match obj.key() {
+                        Some(key) => {
+                            if !f.is_match(key) {
+                                continue;
+                            }
+                        }
+                        None => {}
+                    }
+                }
+
+                if let Some(ref f) = last_modify_filter {
+                    if let Some(d) = obj.last_modified() {
                         if !f.is_match(usize::try_from(d.secs())?) {
                             continue;
                         }
                     }
                 }
-                if let Some(key) = item.key() {
+                if let Some(key) = obj.key() {
                     let _ = line_writer.write_all(key.as_bytes());
                     let _ = line_writer.write_all("\n".as_bytes());
                     total_lines += 1;
                 }
             }
             line_writer.flush()?;
+            Ok(())
+        };
+
+        if let Some(objects) = resp.object_list {
+            // for item in objects {
+            //     if let Some(f) = last_modify_filter {
+            //         if let Some(d) = item.last_modified() {
+            //             if !f.is_match(usize::try_from(d.secs())?) {
+            //                 continue;
+            //             }
+            //         }
+            //     }
+            //     if let Some(key) = item.key() {
+            //         let _ = line_writer.write_all(key.as_bytes());
+            //         let _ = line_writer.write_all("\n".as_bytes());
+            //         total_lines += 1;
+            //     }
+            // }
+            // line_writer.flush()?;
+            write_objects_to_file(objects)?;
         }
 
         while token.is_some() {
@@ -103,21 +135,22 @@ impl OssClient {
                 .list_objects(bucket.clone(), prefix.clone(), batch, token.clone())
                 .await?;
             if let Some(objects) = resp.object_list {
-                for item in objects {
-                    if let Some(f) = last_modify_filter {
-                        if let Some(d) = item.last_modified() {
-                            if !f.is_match(usize::try_from(d.secs())?) {
-                                continue;
-                            }
-                        }
-                    }
-                    if let Some(key) = item.key() {
-                        let _ = line_writer.write_all(key.as_bytes());
-                        let _ = line_writer.write_all("\n".as_bytes());
-                        total_lines += 1;
-                    }
-                }
-                line_writer.flush()?;
+                // for item in objects {
+                //     if let Some(f) = last_modify_filter {
+                //         if let Some(d) = item.last_modified() {
+                //             if !f.is_match(usize::try_from(d.secs())?) {
+                //                 continue;
+                //             }
+                //         }
+                //     }
+                //     if let Some(key) = item.key() {
+                //         let _ = line_writer.write_all(key.as_bytes());
+                //         let _ = line_writer.write_all("\n".as_bytes());
+                //         total_lines += 1;
+                //     }
+                // }
+                // line_writer.flush()?;
+                write_objects_to_file(objects)?;
             }
             token = resp.next_token;
         }

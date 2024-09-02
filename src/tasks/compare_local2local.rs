@@ -6,6 +6,7 @@ use super::{
 };
 use crate::commons::scan_folder_files_to_file;
 use crate::commons::LastModifyFilter;
+use crate::commons::RegexFilter;
 use anyhow::Result;
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -36,10 +37,16 @@ pub struct CompareLocal2Local {
 impl CompareTaskActions for CompareLocal2Local {
     async fn gen_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription> {
-        scan_folder_files_to_file(self.source.as_str(), &object_list_file, last_modify_filter)
+        scan_folder_files_to_file(
+            self.source.as_str(),
+            &object_list_file,
+            regex_filter,
+            last_modify_filter,
+        )
     }
 
     async fn listed_records_comparator(
@@ -141,6 +148,7 @@ impl Local2LocalRecordsComparator {
                     recorddesc.handle_error(
                         &self.stop_mark,
                         &self.err_counter,
+                        self.attributes.max_errors,
                         &self.offset_map,
                         &mut error_file,
                         offset_key.as_str(),

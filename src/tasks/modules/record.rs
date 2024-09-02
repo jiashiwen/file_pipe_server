@@ -82,6 +82,7 @@ impl RecordDescription {
         &self,
         stop_mark: &Arc<AtomicBool>,
         err_counter: &Arc<AtomicUsize>,
+        max_errors: usize,
         offset_map: &Arc<DashMap<String, FilePosition>>,
         save_to: &mut File,
         file_position_key: &str,
@@ -92,13 +93,13 @@ impl RecordDescription {
         );
         err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        // err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        // if err_counter
-        //     .load(std::sync::atomic::Ordering::SeqCst)
-        //     .ge(&max_errors)
-        // {
-        //     stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
-        // }
+        err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if err_counter
+            .load(std::sync::atomic::Ordering::SeqCst)
+            .ge(&max_errors)
+        {
+            stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
 
         let _ = self.save_json_to_file(save_to);
     }

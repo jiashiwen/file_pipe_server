@@ -202,6 +202,7 @@ impl TransferTaskActions for TransferOss2Oss {
     // 生成对象列表
     async fn gen_source_object_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription> {
@@ -214,6 +215,7 @@ impl TransferTaskActions for TransferOss2Oss {
                 self.source.prefix.clone(),
                 self.attributes.objects_per_batch,
                 object_list_file,
+                regex_filter,
                 last_modify_filter,
             )
             .await
@@ -473,7 +475,7 @@ impl TransferTaskActions for TransferOss2Oss {
         checkpoint.task_stage = TransferStage::Increment;
 
         let mut sleep_time = 5;
-        let pd = promote_processbar("executing increment:waiting for data...");
+        // let pd = promote_processbar("executing increment:waiting for data...");
         let mut finished_total_objects = 0;
 
         while !stop_mark.load(std::sync::atomic::Ordering::SeqCst)
@@ -632,7 +634,7 @@ impl TransferTaskActions for TransferOss2Oss {
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(sleep_time)).await;
         }
-        pd.finish();
+        // pd.finish();
     }
 }
 
@@ -766,6 +768,7 @@ impl TransferOss2OssRecordsExecutor {
                 recorddesc.handle_error(
                     &self.stop_mark,
                     &self.err_counter,
+                    self.attributes.max_errors,
                     &self.offset_map,
                     &mut error_file,
                     offset_key.as_str(),
@@ -922,6 +925,7 @@ impl TransferOss2OssRecordsExecutor {
                 record.handle_error(
                     &self.stop_mark,
                     &self.err_counter,
+                    self.attributes.max_errors,
                     &self.offset_map,
                     &mut error_file,
                     offset_key.as_str(),

@@ -1,5 +1,5 @@
 use super::{FileDescription, FilePosition, IncrementAssistant, ListedRecord, RecordDescription};
-use crate::commons::LastModifyFilter;
+use crate::commons::{LastModifyFilter, RegexFilter};
 use anyhow::Result;
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -44,7 +44,6 @@ pub trait TransferTaskActions {
     // 记录描述表执行器
     async fn record_descriptions_transfor(
         &self,
-
         execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<RecordDescription>,
@@ -58,6 +57,7 @@ pub trait TransferTaskActions {
     // Todo 增加正则过滤器
     async fn gen_source_object_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription>;
@@ -90,6 +90,7 @@ pub trait TransferTaskActions {
 pub trait CompareTaskActions {
     async fn gen_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription>;

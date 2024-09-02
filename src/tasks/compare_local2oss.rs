@@ -6,6 +6,7 @@ use super::{
 };
 use crate::commons::scan_folder_files_to_file;
 use crate::commons::LastModifyFilter;
+use crate::commons::RegexFilter;
 use crate::s3::{OSSDescription, OssClient};
 use anyhow::anyhow;
 use anyhow::Result;
@@ -40,10 +41,16 @@ pub struct CompareLocal2Oss {
 impl CompareTaskActions for CompareLocal2Oss {
     async fn gen_list_file(
         &self,
+        regex_filter: Option<RegexFilter>,
         last_modify_filter: Option<LastModifyFilter>,
         object_list_file: &str,
     ) -> Result<FileDescription> {
-        scan_folder_files_to_file(self.source.as_str(), &object_list_file, last_modify_filter)
+        scan_folder_files_to_file(
+            self.source.as_str(),
+            &object_list_file,
+            regex_filter,
+            last_modify_filter,
+        )
     }
 
     async fn listed_records_comparator(
@@ -155,6 +162,7 @@ impl Local2OssRecordsComparator {
                     recorddesc.handle_error(
                         &self.stop_mark,
                         &self.err_counter,
+                        self.attributes.max_errors,
                         &self.offset_map,
                         &mut error_file,
                         offset_key.as_str(),

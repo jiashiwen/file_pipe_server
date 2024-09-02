@@ -146,6 +146,7 @@ pub fn analyze_folder_files_size(
 pub fn scan_folder_files_to_file(
     folder: &str,
     file_name: &str,
+    regex_filter: Option<RegexFilter>,
     last_modify_filter: Option<LastModifyFilter>,
 ) -> Result<FileDescription> {
     let mut total_lines = 0;
@@ -172,12 +173,13 @@ pub fn scan_folder_files_to_file(
                 continue;
             }
 
-            if let Some(f) = last_modify_filter {
-                // let modified_time = entry
-                //     .metadata()?
-                //     .modified()?
-                //     .duration_since(UNIX_EPOCH)?
-                //     .as_secs();
+            if let Some(ref f) = regex_filter {
+                if !f.is_match(p) {
+                    continue;
+                }
+            }
+
+            if let Some(ref f) = last_modify_filter {
                 let modified_time = TryFrom::try_from(
                     entry
                         .metadata()?

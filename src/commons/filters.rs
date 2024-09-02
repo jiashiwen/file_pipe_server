@@ -3,9 +3,6 @@ use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
-pub struct Filter {}
-
-#[derive(Debug, Clone)]
 pub struct RegexFilter {
     pub exclude_regex: Option<RegexSet>,
     pub include_regex: Option<RegexSet>,
@@ -84,7 +81,6 @@ pub enum LastModifyFilterType {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct LastModifyFilter {
     pub filter_type: LastModifyFilterType,
-    // pub timestamp: i128,
     pub timestamp: usize,
 }
 
