@@ -112,7 +112,7 @@ pub async fn snapshot_living_tasks_checkpoints_to_cf() -> Result<()> {
             line_num: 0,
         };
 
-        GLOBAL_LIST_FILE_POSITON_MAP
+        let min = GLOBAL_LIST_FILE_POSITON_MAP
             .iter()
             .filter(|item| item.key().starts_with(&taskid))
             .map(|m| {
@@ -121,14 +121,16 @@ pub async fn snapshot_living_tasks_checkpoints_to_cf() -> Result<()> {
             })
             .min();
 
-        GLOBAL_LIST_FILE_POSITON_MAP.shrink_to_fit();
-        checkpoint.executing_file_position = file_position.clone();
+        if min.is_some() {
+            GLOBAL_LIST_FILE_POSITON_MAP.shrink_to_fit();
+            checkpoint.executing_file_position = file_position.clone();
 
-        if let Err(e) = checkpoint.save_to_rocksdb_cf() {
-            log::error!("{},{}", e, taskid);
-        } else {
-            log::debug!("checkpoint:\n{:?}", checkpoint);
-        };
+            if let Err(e) = checkpoint.save_to_rocksdb_cf() {
+                log::error!("{},{}", e, taskid);
+            } else {
+                log::debug!("checkpoint:\n{:?}", checkpoint);
+            };
+        }
     }
     Ok(())
 }

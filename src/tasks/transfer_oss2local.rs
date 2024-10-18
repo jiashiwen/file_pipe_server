@@ -255,7 +255,6 @@ impl TransferTaskActions for TransferOss2Local {
                     }
 
                     if let Some(d) = obj.last_modified() {
-                        // if last_modify_filter.is_match(usize::try_from(d.secs())?) {
                         if last_modify_filter.is_match(u64::try_from(d.secs())?) {
                             let target_key_str = gen_file_path(&self.target, source_key, "");
                             let record = RecordDescription {
@@ -405,7 +404,6 @@ impl TransferTaskActions for TransferOss2Local {
         stop_mark: Arc<AtomicBool>,
         err_counter: Arc<AtomicUsize>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        // snapshot_stop_mark: Arc<AtomicBool>,
     ) {
         // 循环执行获取lastmodify 大于checkpoint指定的时间戳的对象
         // let lock = assistant.lock().await;

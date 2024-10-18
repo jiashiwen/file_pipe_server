@@ -96,9 +96,6 @@ impl OssClient {
 
                 if let Some(ref f) = last_modify_filter {
                     if let Some(d) = obj.last_modified() {
-                        // if !f.is_match(usize::try_from(d.secs())?) {
-                        //     continue;
-                        // }
                         if !f.is_match(u64::try_from(d.secs())?) {
                             continue;
                         }
@@ -115,21 +112,6 @@ impl OssClient {
         };
 
         if let Some(objects) = resp.object_list {
-            // for item in objects {
-            //     if let Some(f) = last_modify_filter {
-            //         if let Some(d) = item.last_modified() {
-            //             if !f.is_match(usize::try_from(d.secs())?) {
-            //                 continue;
-            //             }
-            //         }
-            //     }
-            //     if let Some(key) = item.key() {
-            //         let _ = line_writer.write_all(key.as_bytes());
-            //         let _ = line_writer.write_all("\n".as_bytes());
-            //         total_lines += 1;
-            //     }
-            // }
-            // line_writer.flush()?;
             write_objects_to_file(objects)?;
         }
 
@@ -138,21 +120,6 @@ impl OssClient {
                 .list_objects(bucket.clone(), prefix.clone(), batch, token.clone())
                 .await?;
             if let Some(objects) = resp.object_list {
-                // for item in objects {
-                //     if let Some(f) = last_modify_filter {
-                //         if let Some(d) = item.last_modified() {
-                //             if !f.is_match(usize::try_from(d.secs())?) {
-                //                 continue;
-                //             }
-                //         }
-                //     }
-                //     if let Some(key) = item.key() {
-                //         let _ = line_writer.write_all(key.as_bytes());
-                //         let _ = line_writer.write_all("\n".as_bytes());
-                //         total_lines += 1;
-                //     }
-                // }
-                // line_writer.flush()?;
                 write_objects_to_file(objects)?;
             }
             token = resp.next_token;
@@ -902,10 +869,6 @@ impl OssClient {
 
                 if let Some(f) = last_modify_filter {
                     if let Some(d) = obj.last_modified() {
-                        // if !f.is_match(usize::try_from(d.secs())?) {
-                        //     continue;
-                        // }
-
                         if !f.is_match(u64::try_from(d.secs())?) {
                             continue;
                         }
@@ -1036,7 +999,6 @@ pub async fn multipart_transfer_obj_paralle_by_range(
         multi_part_chunk_size,
         multi_part_chunks_per_batch,
         multi_part_parallelism,
-        // multi_part_max_parallelism,
     )
     .await;
 
@@ -1067,7 +1029,6 @@ pub async fn transfer_object_parts_by_range(
     multi_part_chunk_size: usize,
     multi_part_chunks_per_batch: usize,
     multi_part_parallelism: usize,
-    // multi_part_max_parallelism: usize,
 ) -> Result<Vec<CompletedPart>> {
     let s_obj = s_client
         .client

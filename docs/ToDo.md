@@ -12,3 +12,4 @@
 - [ ] 任务停止流程：记录当前checkpoint，发送任务停止标志，接受到任务停止标志，所有线程停止，返回OK，清理任务记录Dashmap，回写记录号的checkpoint
 - [ ] 优化过滤逻辑，gen_source_object_list_file 抽象函数增加正则过滤器，删除全量传输中的过滤逻辑
 - [ ] execute_increment 增加正则过滤器
+- [ ] 使用Semaphore控制分片上传的并行度

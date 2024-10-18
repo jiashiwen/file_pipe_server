@@ -75,4 +75,3 @@ aws-smithy-types = { path = "../aws-sdk-rust/sdk/aws-smithy-types" }
 aws-types = { path = "../aws-sdk-rust/sdk/aws-types", feature = [
     "hardcoded-credentials",
 ] }
-# casbin-rbatis-adapter = { git = "https://github.com/jiashiwen/casbin-rbatis-adapter" }

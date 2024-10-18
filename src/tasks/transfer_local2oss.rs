@@ -130,7 +130,6 @@ impl TransferTaskActions for TransferLocal2Oss {
     // 记录执行器
     async fn listed_records_transfor(
         &self,
-        // execute_set: &mut JoinSet<()>,
         execute_set: Arc<RwLock<JoinSet<()>>>,
         executing_transfers: Arc<RwLock<usize>>,
         records: Vec<ListedRecord>,
@@ -236,7 +235,6 @@ impl TransferTaskActions for TransferLocal2Oss {
         let mut removed_lines = 0;
         let mut modified_lines = 0;
 
-        // let reg_filter = RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
         let last_modify_filter = LastModifyFilter {
             filter_type: crate::commons::LastModifyFilterType::Greater,
             timestamp,
@@ -333,13 +331,6 @@ impl TransferTaskActions for TransferLocal2Oss {
                     }
                 }
 
-                // let modified_time = TryFrom::try_from(
-                //     entry
-                //         .metadata()?
-                //         .modified()?
-                //         .duration_since(UNIX_EPOCH)?
-                //         .as_secs(),
-                // )?;
                 let modified_time = entry
                     .metadata()?
                     .modified()?

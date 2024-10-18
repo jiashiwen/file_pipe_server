@@ -23,6 +23,7 @@ use crate::tasks::GLOBAL_TASKS_SYS_JOINSET;
 use crate::tasks::GLOBAL_TASK_STOP_MARK_MAP;
 use crate::{commons::RegexFilter, s3::OSSDescription, tasks::NOTIFY_FILE_PREFIX};
 use anyhow::anyhow;
+use anyhow::Context;
 use anyhow::Result;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -677,32 +678,31 @@ impl TransferTask {
             }
         }
 
-        // let modify_checkpoint_timestamp =
-        //     usize::try_from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())?;
-        let modify_checkpoint_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        // 记录checkpoint
-        let mut checkpoint: CheckPoint = CheckPoint {
-            task_id: self.task_id.clone(),
-            executing_file: executed_file.clone(),
-            executing_file_position: list_file_position.clone(),
-            file_for_notify: None,
-            task_stage: TransferStage::Stock,
-            modify_checkpoint_timestamp,
-            // task_begin_timestamp: usize::try_from(now.as_secs()).unwrap(),
-            task_begin_timestamp: now.as_secs(),
-        };
+        let lock = increment_assistant.lock().await;
+        let notify = lock.get_notify_file_path();
+        drop(lock);
+
+        let mut checkpoint = get_checkpoint(&self.task_id)?;
+        checkpoint.file_for_notify = notify;
+        // checkpoint.executing_file_position.line_num = checkpoint.executing_file.total_lines;
+        // checkpoint.executing_file_position.offset = TryInto::<usize>::try_into(
+        //     checkpoint.executing_file.size,
+        // )
+        // .context(format!("{}:{}", file!(), line!()))?;
 
         if self.attributes.transfer_type.is_stock() {
             //变更任务状态为 finish
             task_status.status = Status::Transfer(TransferStatus::Stopped(TaskStopReason::Finish));
-            let _ = save_task_status_to_cf(task_status)?;
+            let _ =
+                save_task_status_to_cf(task_status).context(format!("{}:{}", file!(), line!()))?;
             checkpoint.save_to_rocksdb_cf()?;
             return Ok(());
         } else {
             //变更任务状态为 Increment
             task_status.status =
                 Status::Transfer(TransferStatus::Running(TransferStage::Increment));
-            let _ = save_task_status_to_cf(task_status)?;
+            let _ =
+                save_task_status_to_cf(task_status).context(format!("{}:{}", file!(), line!()))?;
             checkpoint.task_stage = TransferStage::Increment;
             checkpoint.save_to_rocksdb_cf()?;
         }
@@ -712,12 +712,9 @@ impl TransferTask {
             sys_set.write().await.join_next().await;
         }
 
-        let lock = increment_assistant.lock().await;
-        let notify = lock.get_notify_file_path();
-        drop(lock);
-
         // 增量逻辑
-        let task_status = get_task_status(&self.task_id)?;
+        let task_status =
+            get_task_status(&self.task_id).context(format!("{}:{}", file!(), line!()))?;
         if task_status.is_running_increment()
             && !stop_mark.load(std::sync::atomic::Ordering::Relaxed)
         {
@@ -732,7 +729,6 @@ impl TransferTask {
                     stop_mark.clone(),
                     Arc::clone(&err_counter),
                     Arc::clone(&offset_map),
-                    // stop_mark.clone(),
                 )
                 .await;
             // 配置停止 offset save 标识为 true

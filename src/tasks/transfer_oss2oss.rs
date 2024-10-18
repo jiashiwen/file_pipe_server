@@ -4,8 +4,8 @@ use super::{
 };
 use crate::{
     commons::{
-        json_to_struct, merge_file, promote_processbar, read_lines, struct_to_json_string,
-        LastModifyFilter, RegexFilter,
+        json_to_struct, merge_file, read_lines, struct_to_json_string, LastModifyFilter,
+        RegexFilter,
     },
     resources::get_checkpoint,
     s3::{multipart_transfer_obj_paralle_by_range, OSSDescription, OssClient},
@@ -77,7 +77,7 @@ impl TransferTaskActions for TransferOss2Oss {
             .await
     }
     // 错误记录重试
-    fn error_record_retry(
+    async fn error_record_retry(
         &self,
         stop_mark: Arc<AtomicBool>,
         executing_transfers: Arc<RwLock<usize>>,
@@ -111,6 +111,8 @@ impl TransferTaskActions for TransferOss2Oss {
                     }
 
                     if record_vec.len() > 0 {
+
+                        let executor=self.gen_transfer_executor().await;
                         let transfer = TransferOss2OssRecordsExecutor {
                             task_id: self.task_id.clone(),
                             source: self.source.clone(),
@@ -224,7 +226,6 @@ impl TransferTaskActions for TransferOss2Oss {
     async fn changed_object_capture_based_target(
         &self,
         regex_filter: Option<RegexFilter>,
-        // timestamp: usize,
         timestamp: u64,
     ) -> Result<FileDescription> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
@@ -850,6 +851,7 @@ impl TransferOss2OssRecordsExecutor {
             None => return Err(anyhow!("content length is None")),
         };
         let content_len_usize: usize = content_len.try_into()?;
+
         let expr = match s_obj_output.expires() {
             Some(d) => Some(*d),
             None => None,
