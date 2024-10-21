@@ -111,19 +111,13 @@ pub fn analyze_folder_files_size(
             }
 
             if let Some(f) = &last_modify_filter {
-                // let modified_time = entry
-                //     .metadata()?
-                //     .modified()?
-                //     .duration_since(UNIX_EPOCH)?
-                //     .as_secs();
-                let modified_time = TryFrom::try_from(
-                    entry
-                        .metadata()?
-                        .modified()?
-                        .duration_since(UNIX_EPOCH)?
-                        .as_secs(),
-                )?;
-                if !f.is_match(modified_time) {
+                let modified_time = entry
+                    .metadata()?
+                    .modified()?
+                    .duration_since(UNIX_EPOCH)?
+                    .as_secs();
+
+                if !f.filter(usize::try_from(modified_time)?) {
                     continue;
                 }
             }
@@ -187,7 +181,7 @@ pub fn scan_folder_files_to_file(
                         .duration_since(UNIX_EPOCH)?
                         .as_secs(),
                 )?;
-                if !f.is_match(modified_time) {
+                if !f.filter(modified_time) {
                     continue;
                 }
             }
@@ -210,6 +204,17 @@ pub fn scan_folder_files_to_file(
         total_lines,
     };
     Ok(executed_file)
+}
+
+pub fn append_line_to_file(file_name: &str, content: &str) -> Result<()> {
+    let append_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_name)?;
+    let mut append_linewiter = LineWriter::new(&append_file);
+    append_linewiter.write_all(content.as_bytes())?;
+    append_linewiter.write_all("\n".as_bytes())?;
+    Ok(())
 }
 
 // 生成指定字节数的文件

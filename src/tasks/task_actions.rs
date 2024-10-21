@@ -1,17 +1,13 @@
-use super::{FileDescription, FilePosition, IncrementAssistant, ListedRecord, RecordDescription};
-use crate::commons::{LastModifyFilter, RegexFilter};
+use super::{FileDescription, FilePosition, IncrementAssistant, ListedRecord, RecordOption};
 use anyhow::Result;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::{
     collections::BTreeMap,
-    sync::{
-        atomic::{AtomicBool, AtomicUsize},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
 };
 use tokio::{
-    sync::{Mutex, RwLock},
+    sync::{Mutex, Semaphore},
     task::JoinSet,
 };
 
@@ -22,87 +18,75 @@ use tokio::{
 #[async_trait]
 pub trait TransferTaskActions {
     async fn analyze_source(&self) -> Result<BTreeMap<String, i128>>;
+    // async fn analyze_source(&self) -> Result<DashMap<usize, i128>>;
     // 错误记录重试
-    fn error_record_retry(
+    async fn error_record_retry(
         &self,
         stop_mark: Arc<AtomicBool>,
-        executing_transfers: Arc<RwLock<usize>>,
+        semaphore: Arc<Semaphore>,
     ) -> Result<()>;
 
-    // 记录列表执行器
-    async fn listed_records_transfor(
+    fn gen_transfer_executor(
         &self,
-        execute_set: Arc<RwLock<JoinSet<()>>>,
-        executing_transfers: Arc<RwLock<usize>>,
-        records: Vec<ListedRecord>,
         stop_mark: Arc<AtomicBool>,
-        err_counter: Arc<AtomicUsize>,
+        err_occur: Arc<AtomicBool>,
+        semaphore: Arc<Semaphore>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        list_file: String,
-    );
-
-    // 记录描述表执行器
-    async fn record_descriptions_transfor(
-        &self,
-        execute_set: Arc<RwLock<JoinSet<()>>>,
-        executing_transfers: Arc<RwLock<usize>>,
-        records: Vec<RecordDescription>,
-        stop_mark: Arc<AtomicBool>,
-        err_counter: Arc<AtomicUsize>,
-        offset_map: Arc<DashMap<String, FilePosition>>,
-        list_file: String,
-    );
+        list_file_path: String,
+    ) -> Arc<dyn TransferExecutor + Send + Sync>;
 
     // 生成对象列表
-    // Todo 增加正则过滤器
-    async fn gen_source_object_list_file(
-        &self,
-        regex_filter: Option<RegexFilter>,
-        last_modify_filter: Option<LastModifyFilter>,
-        object_list_file: &str,
-    ) -> Result<FileDescription>;
+    async fn gen_source_object_list_file(&self, object_list_file: &str) -> Result<FileDescription>;
 
     // 以target为基础，抓取变动object
     // 扫描target storage，source 不存在为removed object
     // 按时间戳扫描source storage，大于指定时间戳的object 为 removed objects
-    // Todo 增加正则过滤器
     async fn changed_object_capture_based_target(
         &self,
-        regex_filter: Option<RegexFilter>,
-        timestamp: u64,
+        timestamp: usize,
     ) -> Result<FileDescription>;
 
     // 执行增量前置操作，例如启动notify线程，记录last modify 时间戳等
-    async fn increment_prelude(&self, assistant: Arc<Mutex<IncrementAssistant>>) -> Result<()>;
+    async fn increment_prelude(
+        &self,
+        stop_mark: Arc<AtomicBool>,
+        err_occur: Arc<AtomicBool>,
+        assistant: Arc<Mutex<IncrementAssistant>>,
+    ) -> Result<()>;
 
     // 执行增量任务
     async fn execute_increment(
         &self,
-        execute_set: Arc<RwLock<JoinSet<()>>>,
-        executing_transfers: Arc<RwLock<usize>>,
-        assistant: Arc<Mutex<IncrementAssistant>>,
         stop_mark: Arc<AtomicBool>,
-        err_counter: Arc<AtomicUsize>,
+        err_occur: Arc<AtomicBool>,
+        semaphore: Arc<Semaphore>,
+        execute_set: &mut JoinSet<()>,
+        assistant: Arc<Mutex<IncrementAssistant>>,
         offset_map: Arc<DashMap<String, FilePosition>>,
     );
 }
 
 #[async_trait]
-pub trait CompareTaskActions {
-    async fn gen_list_file(
-        &self,
-        regex_filter: Option<RegexFilter>,
-        last_modify_filter: Option<LastModifyFilter>,
-        object_list_file: &str,
-    ) -> Result<FileDescription>;
+pub trait TransferExecutor {
+    async fn transfer_listed_records(&self, records: Vec<ListedRecord>) -> Result<()>;
+    async fn transfer_record_options(&self, records: Vec<RecordOption>) -> Result<()>;
+}
 
-    async fn listed_records_comparator(
+#[async_trait]
+pub trait CompareTaskActions {
+    async fn gen_list_file(&self, object_list_file: &str) -> Result<FileDescription>;
+
+    fn gen_compare_executor(
         &self,
-        joinset: &mut JoinSet<()>,
-        records: Vec<ListedRecord>,
         stop_mark: Arc<AtomicBool>,
-        err_counter: Arc<AtomicUsize>,
+        err_occur: Arc<AtomicBool>,
+        semaphore: Arc<Semaphore>,
         offset_map: Arc<DashMap<String, FilePosition>>,
-        source_objects_list_file: String,
-    );
+    ) -> Arc<dyn CompareExecutor + Send + Sync>;
+}
+
+#[async_trait]
+pub trait CompareExecutor {
+    async fn compare_listed_records(&self, records: Vec<ListedRecord>) -> Result<()>;
+    fn error_occur(&self);
 }

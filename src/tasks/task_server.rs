@@ -123,7 +123,7 @@ pub async fn snapshot_living_tasks_checkpoints_to_cf() -> Result<()> {
 
         if min.is_some() {
             GLOBAL_LIST_FILE_POSITON_MAP.shrink_to_fit();
-            checkpoint.executing_file_position = file_position.clone();
+            checkpoint.executed_file_position = file_position.clone();
 
             if let Err(e) = checkpoint.save_to_rocksdb_cf() {
                 log::error!("{},{}", e, taskid);

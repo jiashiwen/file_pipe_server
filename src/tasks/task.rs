@@ -228,7 +228,7 @@ impl Task {
             // 重构task status，使用cf记录
             // 主动停止任务时更新任务为停止状态，执行完成时不更新任务状态
             Task::Transfer(transfer) => {
-                let exec_result = transfer.execute().await;
+                let exec_result = transfer.start_task().await;
                 let mut task_status = match get_task_status(&transfer.task_id) {
                     Ok(s) => s,
                     Err(e) => {
@@ -261,7 +261,7 @@ impl Task {
                 remove_exec_joinset(&transfer.task_id);
             }
 
-            Task::Compare(compare) => match compare.execute() {
+            Task::Compare(compare) => match compare.start_compare() {
                 Ok(_) => {
                     let log_info = LogInfo::<String> {
                         task_id: compare.task_id.clone(),

@@ -8,7 +8,7 @@ use std::{
     io::{LineWriter, Write},
     path::Path,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::Receiver,
         Arc,
     },
@@ -73,11 +73,23 @@ impl NotifyWatcher {
         })
     }
 
-    pub async fn watch_to_file(mut self, file: File, file_size: Arc<AtomicU64>) {
+    pub async fn watch_to_file(
+        mut self,
+        stop_mark: Arc<AtomicBool>,
+        err_occur: Arc<AtomicBool>,
+        file: File,
+        file_size: Arc<AtomicU64>,
+    ) {
         let mut linewiter = LineWriter::new(&file);
 
         self.writing_file_status = true;
         for res in self.reciver {
+            if stop_mark.load(std::sync::atomic::Ordering::SeqCst)
+                || err_occur.load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return;
+            }
+
             if !self.writing_file_status {
                 return;
             }
@@ -135,7 +147,7 @@ impl NotifyWatcher {
                             let _ = linewiter.write_all("\n".as_bytes());
                         }
                         Err(e) => {
-                            log::error!("{}", e)
+                            log::error!("{:?}", e)
                         }
                     };
                 }
@@ -166,7 +178,10 @@ impl NotifyWatcher {
 mod test {
     use std::{
         fs::OpenOptions,
-        sync::{atomic::AtomicU64, Arc},
+        sync::{
+            atomic::{AtomicBool, AtomicU64},
+            Arc,
+        },
     };
 
     use tokio::{runtime, task::JoinSet};
@@ -192,7 +207,12 @@ mod test {
                     .unwrap();
                 let notify_watcher = NotifyWatcher::new("/tmp/files").unwrap();
                 notify_watcher
-                    .watch_to_file(file, Arc::clone(&file_size))
+                    .watch_to_file(
+                        Arc::new(AtomicBool::new(false)),
+                        Arc::new(AtomicBool::new(false)),
+                        file,
+                        Arc::clone(&file_size),
+                    )
                     .await;
             });
             let _rs_read = set.spawn(async move {

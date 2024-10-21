@@ -16,6 +16,7 @@ rustyline-derive = "0.10.0"
 lazy_static = "1.4.0"
 tokio = { version = "1.21.2", features = ["full"] }
 anyhow = "1.0.66"
+thiserror = "1.0.64"
 futures = "0.3.25"
 # ToDo 将 fork 替换为 daemonize
 fork = "0.1"

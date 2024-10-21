@@ -11,6 +11,8 @@ use std::{
     },
 };
 
+use crate::commons::append_line_to_file;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ListedRecord {
     pub key: String,
@@ -60,7 +62,7 @@ impl Default for FilePosition {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RecordDescription {
+pub struct RecordOption {
     pub source_key: String,
     pub target_key: String,
     pub list_file_path: String,
@@ -68,7 +70,7 @@ pub struct RecordDescription {
     pub option: Opt,
 }
 
-impl FromStr for RecordDescription {
+impl FromStr for RecordOption {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self> {
         let r = serde_json::from_str::<Self>(s)?;
@@ -76,32 +78,17 @@ impl FromStr for RecordDescription {
     }
 }
 
-impl RecordDescription {
+impl RecordOption {
     //Todo 新增stop_mark 参数，在err_count 达到阈值时变更stop_mark
     pub fn handle_error(
         &self,
-        stop_mark: &Arc<AtomicBool>,
-        err_counter: &Arc<AtomicUsize>,
-        max_errors: usize,
-        offset_map: &Arc<DashMap<String, FilePosition>>,
-        save_to: &mut File,
-        file_position_key: &str,
+        stop_mark: Arc<AtomicBool>,
+        err_occur: Arc<AtomicBool>,
+        append_to: &str,
     ) {
-        offset_map.insert(
-            file_position_key.to_string(),
-            self.list_file_position.clone(),
-        );
-        err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if err_counter
-            .load(std::sync::atomic::Ordering::SeqCst)
-            .ge(&max_errors)
-        {
-            stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-
-        let _ = self.save_json_to_file(save_to);
+        err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
+        stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+        let _ = self.append_json_to_file(append_to);
     }
 
     pub fn save_json_to_file(&self, mut file: &File) -> Result<()> {
@@ -111,6 +98,54 @@ impl RecordDescription {
         file.flush()?;
         Ok(())
     }
+
+    pub fn append_json_to_file(&self, file_name: &str) -> Result<()> {
+        let json = serde_json::to_string(self)?;
+        append_line_to_file(file_name, &json)
+    }
+
+    // pub fn handle_error(
+    //     &self,
+    //     stop_mark: Arc<AtomicBool>,
+    //     err_occur: Arc<AtomicBool>,
+    //     // err_counter: &Arc<AtomicUsize>,
+    //     max_errors: usize,
+    //     offset_map: &Arc<DashMap<String, FilePosition>>,
+    //     save_to: &mut File,
+    //     file_position_key: &str,
+    // ) {
+    //     err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
+    //     stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+    //     let _ = self.append_json_to_file(append_to);
+    //     // offset_map.insert(
+    //     //     file_position_key.to_string(),
+    //     //     self.list_file_position.clone(),
+    //     // );
+    //     // err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+    //     // err_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    //     // if err_counter
+    //     //     .load(std::sync::atomic::Ordering::SeqCst)
+    //     //     .ge(&max_errors)
+    //     // {
+    //     //     stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+    //     // }
+
+    //     // let _ = self.save_json_to_file(save_to);
+    // }
+
+    // pub fn save_json_to_file(&self, mut file: &File) -> Result<()> {
+    //     let mut json = serde_json::to_string(self)?;
+    //     json.push_str("\n");
+    //     file.write_all(json.as_bytes())?;
+    //     file.flush()?;
+    //     Ok(())
+    // }
+
+    // pub fn append_json_to_file(&self, file_name: &str) -> Result<()> {
+    //     let json = serde_json::to_string(self)?;
+    //     append_line_to_file(file_name, &json)
+    // }
 }
 
 #[cfg(test)]

@@ -37,6 +37,29 @@ impl RegexFilter {
         })
     }
 
+    pub fn from_vec_option(
+        exclude_regex: &Option<Vec<String>>,
+        include_regex: &Option<Vec<String>>,
+    ) -> Result<Option<Self>> {
+        let exclude_regex = match exclude_regex {
+            Some(v) => Some(RegexSet::new(v)?),
+            None => None,
+        };
+        let include_regex = match include_regex {
+            Some(v) => Some(RegexSet::new(v)?),
+            None => None,
+        };
+
+        if exclude_regex.is_none() && include_regex.is_none() {
+            return Ok(None);
+        }
+
+        Ok(Some(Self {
+            exclude_regex,
+            include_regex,
+        }))
+    }
+
     #[allow(dead_code)]
     pub fn new(exclude_regex: Option<RegexSet>, include_regex: Option<RegexSet>) -> Self {
         Self {
@@ -72,6 +95,27 @@ impl RegexFilter {
     }
 }
 
+// #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+// pub enum LastModifyFilterType {
+//     Greater,
+//     Less,
+// }
+
+// #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+// pub struct LastModifyFilter {
+//     pub filter_type: LastModifyFilterType,
+//     pub timestamp: usize,
+// }
+
+// impl LastModifyFilter {
+//     pub fn is_match(&self, timestamp: u64) -> bool {
+//         match self.filter_type {
+//             LastModifyFilterType::Greater => timestamp.ge(&self.timestamp),
+//             LastModifyFilterType::Less => timestamp.le(&self.timestamp),
+//         }
+//     }
+// }
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum LastModifyFilterType {
     Greater,
@@ -81,12 +125,11 @@ pub enum LastModifyFilterType {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct LastModifyFilter {
     pub filter_type: LastModifyFilterType,
-    // pub timestamp: usize,
-    pub timestamp: u64,
+    pub timestamp: usize,
 }
 
 impl LastModifyFilter {
-    pub fn is_match(&self, timestamp: u64) -> bool {
+    pub fn filter(&self, timestamp: usize) -> bool {
         match self.filter_type {
             LastModifyFilterType::Greater => timestamp.ge(&self.timestamp),
             LastModifyFilterType::Less => timestamp.le(&self.timestamp),
