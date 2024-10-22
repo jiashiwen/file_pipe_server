@@ -114,7 +114,6 @@ impl TransferTaskActions for TransferOss2Oss {
                             stop_mark.clone(),
                             Arc::new(AtomicBool::new(false)),
                             semaphore.clone(),
-                            // Arc::new(AtomicUsize::new(0)),
                             Arc::new(DashMap::<String, FilePosition>::new()),
                             p.to_string(),
                         );
@@ -569,7 +568,7 @@ impl TransferTaskActions for TransferOss2Oss {
                 line_num: modified.total_lines,
             };
             checkpoint.executed_file = modified.clone();
-            checkpoint.task_begin_timestamp = i128::from(now.as_secs());
+            checkpoint.task_begin_timestamp = now.as_secs();
 
             // let _ = checkpoint.save_to(&checkpoint_path);
             let _ = checkpoint.save_to_rocksdb_cf();
@@ -629,6 +628,7 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
         let target_client = self.target.gen_oss_client()?;
         let s_c = Arc::new(source_client);
         let t_c = Arc::new(target_client);
+
         for record in records {
             if self.stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
                 break;
@@ -640,44 +640,38 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
             };
             target_key.push_str(&record.key);
 
-            self.offset_map.insert(
-                offset_key.clone(),
-                FilePosition {
-                    offset: record.offset,
-                    line_num: record.line_num,
-                },
-            );
-
-            if let Err(e) = self
+            match self
                 .listed_record_handler(&record, &s_c, &t_c, &target_key)
                 .await
             {
-                let record_option = RecordOption {
-                    source_key: record.key.clone(),
-                    target_key: target_key.clone(),
-                    list_file_path: self.list_file_path.clone(),
-                    list_file_position: FilePosition {
-                        offset: record.offset,
-                        line_num: record.line_num,
-                    },
-                    option: Opt::PUT,
-                };
-                record_option.handle_error(
-                    self.stop_mark.clone(),
-                    self.err_occur.clone(),
-                    &error_file_name,
-                );
-                log::error!("{:?} {:?}", e, record_option);
+                Ok(_) => {
+                    self.offset_map.insert(
+                        offset_key.clone(),
+                        FilePosition {
+                            offset: record.offset,
+                            line_num: record.line_num,
+                        },
+                    );
+                }
+                Err(e) => {
+                    let record_option = RecordOption {
+                        source_key: record.key.clone(),
+                        target_key: target_key.clone(),
+                        list_file_path: self.list_file_path.clone(),
+                        list_file_position: FilePosition {
+                            offset: record.offset,
+                            line_num: record.line_num,
+                        },
+                        option: Opt::PUT,
+                    };
+                    record_option.handle_error(
+                        self.stop_mark.clone(),
+                        self.err_occur.clone(),
+                        &error_file_name,
+                    );
+                    log::error!("{:?} {:?}", e, record_option);
+                }
             }
-
-            // 文件位置记录后置，避免中断时已记录而传输未完成，续传时丢记录
-            // self.offset_map.insert(
-            //     offset_key.clone(),
-            //     FilePosition {
-            //         offset: record.offset,
-            //         line_num: record.line_num,
-            //     },
-            // );
         }
 
         self.offset_map.remove(&offset_key);

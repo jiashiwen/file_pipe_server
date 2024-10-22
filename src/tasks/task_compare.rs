@@ -502,13 +502,10 @@ impl CompareTask {
             };
 
             checkpoint.executed_file_position = compare_list_file_position;
-            if let Err(e) = checkpoint.save_to(check_point_file.as_str()) {
-                log::error!("{:?}", e);
-            };
-
-            // while sys_set.len() > 0 {
-            //     sys_set.join_next().await;
-            // }
+            checkpoint.save_to_rocksdb_cf();
+            // if let Err(e) = checkpoint.save_to(check_point_file.as_str()) {
+            //     log::error!("{:?}", e);
+            // };
         });
 
         if task_err_occur.load(std::sync::atomic::Ordering::SeqCst) {

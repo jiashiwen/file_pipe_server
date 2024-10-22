@@ -1,4 +1,5 @@
 use super::HandlerResult;
+use crate::httpserver::module::ReqStartTask;
 use crate::httpserver::service::service_task::{
     service_clean_task, service_remove_task, service_task_checkpoint, service_task_status,
 };
@@ -93,9 +94,8 @@ pub async fn task_analyze(Json(id): Json<TaskId>) -> HandlerResult<BTreeMap<Stri
     }
 }
 
-pub async fn task_start(Json(id): Json<TaskId>) -> HandlerResult<()> {
-    match service_start_task(id.task_id.as_str()) {
-        // Ok(_) => Ok(Json(Response::ok(json!({"start":&id.task_id})))),
+pub async fn task_start(Json(start): Json<ReqStartTask>) -> HandlerResult<()> {
+    match service_start_task(&start) {
         Ok(_) => Ok(Json(Response::ok(()))),
         Err(e) => {
             let err = AppError {

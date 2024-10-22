@@ -80,7 +80,8 @@ pub fn change_taskstatus_to_stop() -> Result<()> {
 
 pub fn save_checkpoint_to_cf(checkpoint: &mut CheckPoint) -> Result<()> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
-    checkpoint.modify_checkpoint_timestamp = i128::from(now.as_secs());
+    // checkpoint.modify_checkpoint_timestamp = i128::from(now.as_secs());
+    checkpoint.modify_checkpoint_timestamp = now.as_secs();
 
     let cf = match GLOBAL_ROCKSDB.cf_handle(CF_TASK_CHECKPOINTS) {
         Some(cf) => cf,

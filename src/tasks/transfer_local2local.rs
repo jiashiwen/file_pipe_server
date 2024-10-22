@@ -96,6 +96,7 @@ impl TransferTaskActions for TransferLocal2Local {
 
                     if record_vec.len() > 0 {
                         let local2local = TransferLocal2LocalExecutor {
+                            task_id: self.task_id.clone(),
                             source: self.source.clone(),
                             target: self.target.clone(),
                             stop_mark: stop_mark.clone(),
@@ -123,6 +124,7 @@ impl TransferTaskActions for TransferLocal2Local {
         list_file_path: String,
     ) -> Arc<dyn TransferExecutor + Send + Sync> {
         let executor = TransferLocal2LocalExecutor {
+            task_id: self.task_id.clone(),
             source: self.source.clone(),
             target: self.target.clone(),
             stop_mark,
@@ -283,7 +285,7 @@ impl TransferTaskActions for TransferLocal2Local {
         let total_lines = removed_lines + modified_lines;
 
         fs::rename(&removed, &modified)?;
-        // fs::remove_file(&modified)?;
+
         let file_desc = FileDescription {
             path: modified.to_string(),
             size: total_size,
@@ -485,6 +487,7 @@ impl TransferTaskActions for TransferLocal2Local {
 
             if records.len() > 0 {
                 let copy = TransferLocal2LocalExecutor {
+                    task_id: self.task_id.clone(),
                     source: self.source.clone(),
                     target: self.target.clone(),
                     stop_mark: stop_mark.clone(),
@@ -586,6 +589,7 @@ impl TransferLocal2Local {
 
 #[derive(Debug, Clone)]
 pub struct TransferLocal2LocalExecutor {
+    pub task_id: String,
     pub source: String,
     pub target: String,
     pub stop_mark: Arc<AtomicBool>,
@@ -664,7 +668,7 @@ impl TransferExecutor for TransferLocal2LocalExecutor {
                         self.err_occur.clone(),
                         &error_file_name,
                     );
-                    log::error!("{:?},{:?}", e, opt);
+                    log::error!("{:?},{:?},{:?}", self.task_id, e, opt);
                 }
             };
         }

@@ -1,6 +1,6 @@
 use super::{
     CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_LIST_FILE_POSITON_MAP,
-    GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_STOP_MARK_MAP,
+    GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_LIST_FILE_POSITON_MAP, GLOBAL_TASK_STOP_MARK_MAP,
 };
 use crate::{
     commons::{
@@ -114,6 +114,7 @@ impl Task {
             }
         }
     }
+
     pub fn set_task_id(&mut self, task_id: &str) {
         match self {
             Task::Transfer(transfer) => {
@@ -121,6 +122,17 @@ impl Task {
             }
             Task::Compare(compare) => {
                 compare.task_id = task_id.to_string();
+            }
+        }
+    }
+
+    pub fn set_from_checkpoint(&mut self, from_checkpoint: bool) {
+        match self {
+            Task::Transfer(transfer) => {
+                transfer.attributes.start_from_checkpoint = from_checkpoint;
+            }
+            Task::Compare(compare) => {
+                compare.attributes.start_from_checkpoint = from_checkpoint;
             }
         }
     }
@@ -133,19 +145,14 @@ impl Task {
     }
 
     // 清理任务运行状态，包括stop_mark,task_status,stok期间文件offset记录信息等
-    pub fn clean(&self) -> Result<()> {
+    pub fn clean_runtime_status(&self) -> Result<()> {
         let task_id = self.task_id();
         if task_is_living(&task_id) {
             return Err(anyhow!("task is living"));
         }
 
         // 清理 stock 传输列表文件offset记录
-        for item in GLOBAL_LIST_FILE_POSITON_MAP.iter() {
-            let key = item.key();
-            if key.starts_with(&task_id) {
-                GLOBAL_LIST_FILE_POSITON_MAP.remove(key);
-            }
-        }
+        GLOBAL_TASK_LIST_FILE_POSITON_MAP.remove(&task_id);
         // 清理 execute joinset
         remove_exec_joinset(&task_id);
         // 清理 sys joinset
@@ -156,6 +163,18 @@ impl Task {
         remove_task_status_from_cf(&task_id).context(format!("{}:{}", file!(), line!()))?;
         // 清理任务checkpoint
         remove_checkpoint_from_cf(&task_id).context(format!("{}:{}", file!(), line!()))?;
+        // 清理meta dir
+        let _ = fs::remove_dir(self.meta_dir());
+        Ok(())
+    }
+
+    // 删除meta目录
+    pub fn remove_meta_dir(&self) -> Result<()> {
+        let task_id = self.task_id();
+        if task_is_living(&task_id) {
+            return Err(anyhow!("task is living"));
+        }
+
         // 清理meta dir
         let _ = fs::remove_dir(self.meta_dir());
         Ok(())
@@ -505,32 +524,6 @@ impl TaskTruncateBucket {
 
         Ok(())
     }
-}
-
-pub fn clean_task(task_id: &str) -> Result<()> {
-    if task_is_living(&task_id) {
-        return Err(anyhow!("task is living"));
-    }
-    // 清理 stock 传输列表文件offset记录
-    for item in GLOBAL_LIST_FILE_POSITON_MAP.iter() {
-        let key = item.key();
-        if key.starts_with(&task_id) {
-            GLOBAL_LIST_FILE_POSITON_MAP.remove(key);
-        }
-    }
-    // 清理 execute joinset
-    remove_exec_joinset(&task_id);
-    // 清理 sys joinset
-    GLOBAL_TASKS_SYS_JOINSET.remove(task_id);
-    // 清理stop mark
-    GLOBAL_TASK_STOP_MARK_MAP.remove(task_id);
-    // 清理任务状态 task status
-    remove_task_status_from_cf(&task_id)?;
-    // 清理任务checkpoint
-    remove_checkpoint_from_cf(&task_id)?;
-    // Todo 清理meta dir,遍历current_config 中的meta_dir 目录，删除名为task_id 的子目录
-    // let _ = fs::remove_dir(self.meta_dir());
-    Ok(())
 }
 
 pub fn task_id_generator() -> i64 {

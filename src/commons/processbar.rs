@@ -1,4 +1,7 @@
-use crate::{resources::get_task_status, tasks::FilePosition};
+use crate::{
+    resources::{get_checkpoint, get_task_status},
+    tasks::FilePosition,
+};
 use dashmap::DashMap;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use std::{
@@ -28,35 +31,22 @@ pub async fn quantify_processbar(
     .progress_chars("#>-");
     pb.set_style(progress_style);
 
-    // 符合 stop_mark is false 并且 transferStage::stock
     while !stop_mark.load(std::sync::atomic::Ordering::Relaxed) {
-        match get_task_status(&task_id) {
-            Ok(ts) => match ts.is_running_stock() {
-                true => {}
-                false => {
-                    break;
-                }
-            },
+        tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+        let checkpoint = match get_checkpoint(&task_id) {
+            Ok(c) => c,
             Err(e) => {
                 log::error!("{:?}", e);
-                break;
+                continue;
             }
         };
+        pb.set_position(checkpoint.executed_file_position.line_num);
+        log::info!(
+            "total:{},executed:{}",
+            total,
+            checkpoint.executed_file_position.line_num
+        );
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-        let line_num = status_map
-            .iter()
-            .filter(|f| f.key().starts_with(&task_id))
-            .map(|m| m.line_num)
-            .min();
-        match line_num {
-            Some(current) => {
-                let new = min(current, total);
-                pb.set_position(new);
-                log::info!("total:{},executed:{}", total, new)
-            }
-            None => {}
-        }
         yield_now().await;
     }
     log::info!("total:{},executed:{}", total, total);

@@ -8,6 +8,7 @@ use once_cell::sync::Lazy;
 use std::sync::{atomic::AtomicBool, Arc};
 use tokio::runtime;
 use tokio::runtime::Runtime;
+use tokio::task::yield_now;
 use tokio::{sync::RwLock, task::JoinSet};
 
 pub static GLOBAL_TASK_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
@@ -54,11 +55,19 @@ pub static GLOBAL_LIST_FILE_POSITON_MAP: Lazy<Arc<DashMap<String, FilePosition>>
         Arc::new(map)
     });
 
+/// task id 与 task offset 映射
+pub static GLOBAL_TASK_LIST_FILE_POSITON_MAP: Lazy<
+    Arc<DashMap<String, Arc<DashMap<String, FilePosition>>>>,
+> = Lazy::new(|| {
+    let task_offset = DashMap::<String, Arc<DashMap<String, FilePosition>>>::new();
+    Arc::new(task_offset)
+});
+
 fn init_task_runtime() -> Result<Runtime> {
     let rt = runtime::Builder::new_multi_thread()
         .worker_threads(num_cpus::get())
         .enable_all()
-        .max_io_events_per_tick(num_cpus::get() * 3)
+        // .max_io_events_per_tick(num_cpus::get() * 3)
         .build()?;
     Ok(rt)
 }
@@ -107,30 +116,34 @@ pub async fn snapshot_living_tasks_checkpoints_to_cf() -> Result<()> {
                 continue;
             }
         };
-        let mut file_position = FilePosition {
-            offset: 0,
-            line_num: 0,
+
+        let mut file_position = checkpoint.executed_file_position.clone();
+
+        let offset_map = match GLOBAL_TASK_LIST_FILE_POSITON_MAP.get(&taskid) {
+            Some(m) => m,
+            None => {
+                continue;
+            }
         };
 
-        let min = GLOBAL_LIST_FILE_POSITON_MAP
-            .iter()
-            .filter(|item| item.key().starts_with(&taskid))
-            .map(|m| {
-                file_position = m.clone();
-                m.offset
-            })
-            .min();
-
-        if min.is_some() {
-            GLOBAL_LIST_FILE_POSITON_MAP.shrink_to_fit();
-            checkpoint.executed_file_position = file_position.clone();
-
-            if let Err(e) = checkpoint.save_to_rocksdb_cf() {
-                log::error!("{},{}", e, taskid);
+        for (idx, iterm) in offset_map.iter().enumerate() {
+            if idx.eq(&0) {
+                file_position = iterm.value().clone();
             } else {
-                log::debug!("checkpoint:\n{:?}", checkpoint);
-            };
+                if file_position.offset > iterm.value().offset {
+                    file_position = iterm.value().clone();
+                }
+            }
         }
+
+        offset_map.shrink_to_fit();
+        checkpoint.executed_file_position = file_position.clone();
+
+        if let Err(e) = checkpoint.save_to_rocksdb_cf() {
+            log::error!("{},{}", e, taskid);
+        } else {
+            log::debug!("checkpoint:\n{:?}", checkpoint);
+        };
     }
     Ok(())
 }

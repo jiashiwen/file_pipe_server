@@ -137,7 +137,6 @@ fn cmd_match(matches: &ArgMatches) {
         };
 
         let thread_http = thread::spawn(|| {
-            // let rt = Runtime::new().unwrap();
             let rt = runtime::Builder::new_multi_thread()
                 .worker_threads(num_cpus::get())
                 .enable_all()

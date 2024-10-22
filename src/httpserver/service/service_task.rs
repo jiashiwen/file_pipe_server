@@ -1,12 +1,12 @@
 use crate::{
     commons::{json_to_struct, struct_to_json_string},
     configure::get_config,
-    httpserver::module::RespListTask,
+    httpserver::module::{ReqStartTask, RespListTask},
     resources::{
         get_checkpoint, get_task, get_task_status, remove_task_from_cf, task_is_living, CF_TASK,
         GLOBAL_ROCKSDB,
     },
-    tasks::{clean_task, gen_file_path, CheckPoint, Task, TaskStatus, GLOBAL_TASK_RUNTIME},
+    tasks::{gen_file_path, CheckPoint, Task, TaskStatus, GLOBAL_TASK_RUNTIME},
 };
 use anyhow::Result;
 use anyhow::{anyhow, Context};
@@ -22,8 +22,10 @@ pub fn service_remove_task(task_id: &str) -> Result<()> {
         Some(t) => t,
         None => return Ok(()),
     };
-    task.clean().context(format!("{}:{}", file!(), line!()))?;
-    clean_task(task_id)?;
+    task.clean_runtime_status()
+        .context(format!("{}:{}", file!(), line!()))?;
+    task.remove_meta_dir()
+        .context(format!("{}:{}", file!(), line!()))?;
     remove_task_from_cf(task_id)
 }
 
@@ -32,8 +34,8 @@ pub fn service_clean_task(task_id: &str) -> Result<()> {
         Some(t) => t,
         None => return Ok(()),
     };
-    task.clean().context(format!("{}:{}", file!(), line!()))
-    // clean_task(task_id)
+    task.clean_runtime_status()
+        .context(format!("{}:{}", file!(), line!()))
 }
 
 pub fn service_update_task(task_id: &str, task: &mut Task) -> Result<()> {
@@ -50,14 +52,18 @@ pub fn service_update_task(task_id: &str, task: &mut Task) -> Result<()> {
     Ok(())
 }
 
-pub fn service_start_task(task_id: &str) -> Result<()> {
-    if task_is_living(task_id) {
-        return Err(anyhow!("task {} is living", task_id));
+pub fn service_start_task(task_start_req: &ReqStartTask) -> Result<()> {
+    if task_is_living(task_start_req.task_id.as_str()) {
+        return Err(anyhow!("task {} is living", task_start_req.task_id));
     }
-    let task = match get_task(task_id)? {
+    let mut task = match get_task(task_start_req.task_id.as_str())? {
         Some(t) => t,
         None => return Err(anyhow!("task not exist")),
     };
+
+    if task_start_req.from_checkpoint {
+        task.set_from_checkpoint(task_start_req.from_checkpoint);
+    }
 
     GLOBAL_TASK_RUNTIME.spawn(async move { task.execute().await });
     // 检查任务生存状态
