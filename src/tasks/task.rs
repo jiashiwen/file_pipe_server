@@ -1,8 +1,12 @@
-use super::{
-    ObjectStorage, TransferTask, TransferType, GLOBAL_LIST_FILE_POSITON_MAP,
-    GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_LIST_FILE_POSITON_MAP, GLOBAL_TASK_STOP_MARK_MAP,
+// use crate::tasks::transfer::task_transfer{ GLOBAL_LIST_FILE_POSITON_MAP,
+//     GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_LIST_FILE_POSITON_MAP, GLOBAL_TASK_STOP_MARK_MAP,
+// };
+use super::task_status_saver::{
+    remove_exec_joinset, GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_LIST_FILE_POSITON_MAP,
+    GLOBAL_TASK_STOP_MARK_MAP,
 };
 use crate::tasks::compare::task_compare::CompareTask;
+use crate::tasks::transfer::task_transfer::{ObjectStorage, TransferTask, TransferType};
 use crate::{
     commons::{
         byte_size_str_to_usize, byte_size_usize_to_str, json_to_struct, struct_to_json_string,
@@ -14,7 +18,7 @@ use crate::{
         save_task_status_to_cf, task_is_living, CF_TASK, GLOBAL_ROCKSDB,
     },
     s3::OSSDescription,
-    tasks::{remove_exec_joinset, task_errors::TaskError, LogInfo, Status, TransferStatus},
+    tasks::{task_errors::TaskError, LogInfo, Status, TransferStatus},
 };
 use anyhow::{anyhow, Context, Result};
 use aws_sdk_s3::types::ObjectIdentifier;

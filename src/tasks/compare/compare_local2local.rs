@@ -4,10 +4,10 @@ use super::task_compare::{
 };
 use crate::commons::scan_folder_files_to_file;
 use crate::commons::RegexFilter;
-use crate::tasks::task_actions::CompareExecutor;
 use crate::tasks::{
-    gen_file_path, task_actions::CompareTaskActions, FileDescription, FilePosition, ListedRecord,
-    COMPARE_RESULT_PREFIX, OFFSET_PREFIX,
+    task::{gen_file_path, COMPARE_RESULT_PREFIX, OFFSET_PREFIX},
+    task_actions::{CompareExecutor, CompareTaskActions},
+    FileDescription, FilePosition, ListedRecord,
 };
 use anyhow::Result;
 use async_trait::async_trait;

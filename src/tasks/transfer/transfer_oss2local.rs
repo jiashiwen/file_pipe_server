@@ -1,12 +1,13 @@
-use super::task_actions::TransferExecutor;
-use super::{
-    gen_file_path, task_actions::TransferTaskActions, IncrementAssistant, TransferStage,
-    TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
-    TRANSFER_ERROR_RECORD_PREFIX, TRANSFER_OBJECT_LIST_FILE_PREFIX,
-};
-use super::{FileDescription, FilePosition, ListedRecord, Opt, RecordOption};
+use super::task_transfer::TransferTaskAttributes;
 use crate::resources::get_checkpoint;
-use crate::tasks::TaskDefaultParameters;
+use crate::tasks::task::{gen_file_path, TaskDefaultParameters};
+use crate::tasks::task::{
+    TransferStage, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX, TRANSFER_ERROR_RECORD_PREFIX,
+    TRANSFER_OBJECT_LIST_FILE_PREFIX,
+};
+use crate::tasks::task_actions::TransferExecutor;
+use crate::tasks::{task_actions::TransferTaskActions, IncrementAssistant};
+use crate::tasks::{FileDescription, FilePosition, ListedRecord, Opt, RecordOption};
 use crate::{
     commons::{
         json_to_struct, merge_file, read_lines, struct_to_json_string, LastModifyFilter,

@@ -1,14 +1,10 @@
 use anyhow::{Error, Result};
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
     io::Write,
     str::FromStr,
-    sync::{
-        atomic::{AtomicBool, AtomicUsize},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use crate::commons::append_line_to_file;

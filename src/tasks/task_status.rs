@@ -1,4 +1,4 @@
-use super::{TaskStopReason, TaskType, TransferStage};
+use super::task::{TaskStopReason, TaskType, TransferStage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

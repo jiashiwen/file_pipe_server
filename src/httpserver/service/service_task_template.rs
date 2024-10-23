@@ -1,11 +1,12 @@
-use anyhow::Result;
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use crate::tasks::transfer::task_transfer::ObjectStorage;
+use crate::tasks::transfer::task_transfer::TransferTask;
 use crate::{
     commons::{LastModifyFilter, LastModifyFilterType},
     s3::{OSSDescription, OssProvider},
-    tasks::{ObjectStorage, Task, TransferTask},
+    tasks::Task,
 };
+use anyhow::Result;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn service_task_template_transfer_oss2oss() -> Result<Task> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?;

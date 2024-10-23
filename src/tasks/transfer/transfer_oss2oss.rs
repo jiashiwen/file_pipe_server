@@ -1,8 +1,11 @@
-use super::{
-    gen_file_path,
+use super::task_transfer::TransferTaskAttributes;
+use crate::tasks::task::{gen_file_path, TaskDefaultParameters};
+use crate::tasks::task::{
+    TransferStage, MODIFIED_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX, TRANSFER_ERROR_RECORD_PREFIX,
+};
+use crate::tasks::{
     task_actions::{TransferExecutor, TransferTaskActions},
-    IncrementAssistant, TransferStage, TransferTaskAttributes, MODIFIED_PREFIX, OFFSET_PREFIX,
-    REMOVED_PREFIX, TRANSFER_ERROR_RECORD_PREFIX,
+    IncrementAssistant,
 };
 use crate::{
     commons::{
@@ -11,10 +14,7 @@ use crate::{
     },
     resources::get_checkpoint,
     s3::{multipart_transfer_obj_paralle_by_range, OSSDescription, OssClient},
-    tasks::{
-        FileDescription, FilePosition, ListedRecord, LogInfo, Opt, RecordOption,
-        TaskDefaultParameters,
-    },
+    tasks::{FileDescription, FilePosition, ListedRecord, LogInfo, Opt, RecordOption},
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;

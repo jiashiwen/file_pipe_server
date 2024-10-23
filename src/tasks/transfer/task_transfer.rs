@@ -1,34 +1,34 @@
-use super::task_status;
-use super::FileDescription;
-use super::LogInfo;
-use super::RecordOption;
-use super::TaskStopReason;
-use super::GLOBAL_TASK_LIST_FILE_POSITON_MAP;
-use super::{
-    de_usize_from_str, gen_file_path, se_usize_to_str, CheckPoint, FilePosition, ListedRecord,
-    TaskDefaultParameters, TransferStage, OFFSET_PREFIX, TRANSFER_OBJECT_LIST_FILE_PREFIX,
-};
-use super::{
-    task_actions::TransferTaskActions, IncrementAssistant, TransferLocal2Local, TransferLocal2Oss,
-    TransferOss2Local, TransferOss2Oss,
-};
 use crate::commons::quantify_processbar;
 use crate::commons::{json_to_struct, LastModifyFilter};
 use crate::resources::get_checkpoint;
-use crate::resources::get_task_status;
 use crate::resources::save_task_status_to_cf;
+use crate::s3::OSSDescription;
+use crate::tasks::modules::{CheckPoint, FilePosition, ListedRecord};
+use crate::tasks::task::TaskStopReason;
+use crate::tasks::task::NOTIFY_FILE_PREFIX;
+use crate::tasks::task::{
+    de_usize_from_str, gen_file_path, se_usize_to_str, TaskDefaultParameters, TransferStage,
+    OFFSET_PREFIX, TRANSFER_OBJECT_LIST_FILE_PREFIX,
+};
+use crate::tasks::task_status_saver::{
+    GLOBAL_TASK_LIST_FILE_POSITON_MAP, GLOBAL_TASK_STOP_MARK_MAP,
+};
+use crate::tasks::transfer::transfer_local2local::TransferLocal2Local;
+use crate::tasks::transfer::transfer_local2oss::TransferLocal2Oss;
+use crate::tasks::transfer::transfer_oss2local::TransferOss2Local;
+use crate::tasks::transfer::transfer_oss2oss::TransferOss2Oss;
+use crate::tasks::FileDescription;
+use crate::tasks::LogInfo;
+use crate::tasks::RecordOption;
 use crate::tasks::Status;
 use crate::tasks::TaskStatus;
 use crate::tasks::TransferStatus;
-use crate::tasks::GLOBAL_TASKS_EXEC_JOINSET;
-use crate::tasks::GLOBAL_TASKS_SYS_JOINSET;
-use crate::tasks::GLOBAL_TASK_STOP_MARK_MAP;
-use crate::{commons::RegexFilter, s3::OSSDescription, tasks::NOTIFY_FILE_PREFIX};
+
+use crate::tasks::{task_actions::TransferTaskActions, IncrementAssistant};
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use dashmap::DashMap;
-use log::Log;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::OpenOptions;
@@ -37,12 +37,8 @@ use std::time::UNIX_EPOCH;
 use std::{
     fs::{self, File},
     io::{self, BufRead},
-    sync::{
-        atomic::{AtomicBool, AtomicUsize},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
 };
-use tokio::sync::RwLock;
 use tokio::sync::Semaphore;
 use tokio::{
     sync::Mutex,

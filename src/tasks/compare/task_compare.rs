@@ -3,12 +3,13 @@ use crate::tasks::compare::{
     compare_local2local::CompareLocal2Local, compare_local2oss::TaskCompareLocal2Oss,
     compare_oss2local::TaskCompareOss2Local, compare_oss2oss::TaskCompareOss2Oss,
 };
-use crate::tasks::{de_usize_from_str, se_usize_to_str};
-use crate::tasks::{
-    gen_file_path, task_actions::CompareTaskActions, ObjectStorage, TaskDefaultParameters,
-    TransferStage, COMPARE_CHECK_POINT_FILE, COMPARE_RESULT_PREFIX,
-    COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX, OFFSET_PREFIX,
+use crate::tasks::task::TaskDefaultParameters;
+use crate::tasks::task::{de_usize_from_str, gen_file_path, se_usize_to_str};
+use crate::tasks::task::{
+    COMPARE_CHECK_POINT_FILE, COMPARE_RESULT_PREFIX, COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX,
 };
+use crate::tasks::task_actions::CompareTaskActions;
+use crate::tasks::transfer::task_transfer::ObjectStorage;
 use crate::tasks::{get_task_checkpoint, FileDescription, FilePosition, ListedRecord};
 use anyhow::anyhow;
 use anyhow::Result;

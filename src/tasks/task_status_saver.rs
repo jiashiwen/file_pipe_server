@@ -8,7 +8,6 @@ use once_cell::sync::Lazy;
 use std::sync::{atomic::AtomicBool, Arc};
 use tokio::runtime;
 use tokio::runtime::Runtime;
-use tokio::task::yield_now;
 use tokio::{sync::RwLock, task::JoinSet};
 
 pub static GLOBAL_TASK_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {

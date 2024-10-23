@@ -2,7 +2,7 @@ use super::FilePosition;
 use crate::{
     commons::{read_yaml_file, struct_to_yaml_string},
     resources::{CF_TASK_CHECKPOINTS, GLOBAL_ROCKSDB},
-    tasks::{TaskDefaultParameters, TransferStage},
+    tasks::task::{TaskDefaultParameters, TransferStage},
 };
 use anyhow::{anyhow, Error, Result};
 use serde::{Deserialize, Serialize};
