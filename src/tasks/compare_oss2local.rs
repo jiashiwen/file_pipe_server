@@ -247,7 +247,7 @@ impl Oss2LocalRecordsComparator {
         target_key: &str,
     ) -> Result<Option<ObjectDiff>> {
         let buffer_size = 1048577;
-        // let s_len = TryInto::<usize>::try_into(s_obj.content_length())?;
+
         let s_len = match s_obj.content_length() {
             Some(l) => TryInto::<usize>::try_into(l)?,
             None => return Err(anyhow!("content length is None")),

@@ -9,6 +9,7 @@ mod task;
 mod task_actions;
 mod task_assistant;
 mod task_compare;
+pub mod task_errors;
 mod task_status;
 mod task_status_saver;
 mod task_transfer;

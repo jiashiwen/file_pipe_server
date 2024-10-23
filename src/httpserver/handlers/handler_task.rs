@@ -17,7 +17,6 @@ use crate::{
     tasks::Task,
 };
 use axum::Json;
-use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
 pub async fn task_create(Json(mut task): Json<Task>) -> HandlerResult<TaskId> {
@@ -107,15 +106,6 @@ pub async fn task_start(Json(start): Json<ReqStartTask>) -> HandlerResult<()> {
         }
     }
 }
-
-// pub async fn task_start(Json(mut payload): Json<TestGlobalJoinsetTask>) -> HandlerResult<Value> {
-//     payload.task_id = task_id_generator().to_string();
-//     GLOBAL_TASK_RUNTIME.spawn(async move {
-//         payload.run(10).await;
-//     });
-
-//     Ok(Json(Response::ok(json!({"start":"ok"}))))
-// }
 
 pub async fn task_stop(Json(id): Json<TaskId>) -> HandlerResult<()> {
     match service_stop_task(id.task_id.as_str()) {

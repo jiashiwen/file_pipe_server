@@ -13,7 +13,7 @@ use crate::{
         save_task_status_to_cf, task_is_living, CF_TASK, GLOBAL_ROCKSDB,
     },
     s3::OSSDescription,
-    tasks::{remove_exec_joinset, LogInfo, Status, TransferStatus},
+    tasks::{remove_exec_joinset, task_errors::TaskError, LogInfo, Status, TransferStatus},
 };
 use anyhow::{anyhow, Context, Result};
 use aws_sdk_s3::types::ObjectIdentifier;
@@ -31,7 +31,6 @@ use tokio::{runtime, task::JoinSet};
 
 pub const TRANSFER_OBJECT_LIST_FILE_PREFIX: &'static str = "transfer_objects_list_";
 pub const COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX: &'static str = "compare_source_list_";
-// pub const TRANSFER_CHECK_POINT_FILE: &'static str = "checkpoint_transfer.yml";
 pub const COMPARE_CHECK_POINT_FILE: &'static str = "checkpoint_compare.yml";
 pub const TRANSFER_ERROR_RECORD_PREFIX: &'static str = "transfer_error_record_";
 pub const COMPARE_ERROR_RECORD_PREFIX: &'static str = "compare_error_record_";
@@ -268,9 +267,17 @@ impl Task {
                         log::info!("{:?}", log_info)
                     }
                     Err(e) => {
+                        let err = TaskError {
+                            task_id: self.task_id(),
+                            error: e,
+                        };
+                        log::error!("{}", err);
                         task_status.status =
                             Status::Transfer(TransferStatus::Stopped(TaskStopReason::Broken));
-                        log::error!("{}", e);
+                        // log::error!(
+                        //     "{:?}",
+                        //     e.context(format!("{},{}:{}", self.task_id(), file!(), line!()))
+                        // );
                     }
                 }
 

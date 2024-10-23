@@ -13,3 +13,4 @@
 - [ ] 优化过滤逻辑，gen_source_object_list_file 抽象函数增加正则过滤器，删除全量传输中的过滤逻辑
 - [ ] execute_increment 增加正则过滤器
 - [ ] 使用Semaphore控制分片上传的并行度
+- [ ] 日志输出整理，输出task_id

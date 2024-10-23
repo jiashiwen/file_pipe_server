@@ -219,7 +219,6 @@ impl TransferTaskActions for TransferOss2Oss {
                         continue;
                     }
                     if let Some(d) = obj.last_modified() {
-                        // if last_modify_filter.is_match(usize::try_from(d.secs())?) {
                         if last_modify_filter.filter(usize::try_from(d.secs())?) {
                             let mut target_key = "".to_string();
                             if let Some(p) = &self.target.prefix {
@@ -439,7 +438,6 @@ impl TransferTaskActions for TransferOss2Oss {
             };
 
         let mut sleep_time = 5;
-        // let pd = prompt_processbar("executing increment:waiting for data...");
         let mut finished_total_objects = 0;
 
         while !stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
@@ -570,7 +568,6 @@ impl TransferTaskActions for TransferOss2Oss {
             checkpoint.executed_file = modified.clone();
             checkpoint.task_begin_timestamp = now.as_secs();
 
-            // let _ = checkpoint.save_to(&checkpoint_path);
             let _ = checkpoint.save_to_rocksdb_cf();
 
             //递增等待时间
@@ -585,7 +582,6 @@ impl TransferTaskActions for TransferOss2Oss {
             }
             tokio::time::sleep(tokio::time::Duration::from_secs(sleep_time)).await;
         }
-        // pd.finish();
     }
 }
 
@@ -682,7 +678,8 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
                 self.err_occur
                     .store(true, std::sync::atomic::Ordering::SeqCst);
                 log::error!("{:?}", e);
-                return Err(anyhow!(e));
+                // return Err(anyhow!(e));
+                return Err(anyhow::Error::new(e));
             }
         };
         match error_file.metadata() {

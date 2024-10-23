@@ -1,5 +1,6 @@
 use super::{rand_util::rand_string, size_distributed, LastModifyFilter, RegexFilter};
 use crate::tasks::FileDescription;
+use anyhow::anyhow;
 use anyhow::Result;
 use std::{
     collections::BTreeMap,
@@ -143,6 +144,10 @@ pub fn scan_folder_files_to_file(
     regex_filter: Option<RegexFilter>,
     last_modify_filter: Option<LastModifyFilter>,
 ) -> Result<FileDescription> {
+    let folder_path = Path::new(folder);
+    if !folder_path.exists() {
+        return Err(anyhow!("folder not exists").context(format!("{}:{}", file!(), line!())));
+    };
     let mut total_lines = 0;
     let path = std::path::Path::new(file_name);
     if let Some(p) = path.parent() {
