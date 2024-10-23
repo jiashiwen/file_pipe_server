@@ -1,7 +1,8 @@
 use super::{
-    CompareTask, ObjectStorage, TransferTask, TransferType, GLOBAL_LIST_FILE_POSITON_MAP,
+    ObjectStorage, TransferTask, TransferType, GLOBAL_LIST_FILE_POSITON_MAP,
     GLOBAL_TASKS_SYS_JOINSET, GLOBAL_TASK_LIST_FILE_POSITON_MAP, GLOBAL_TASK_STOP_MARK_MAP,
 };
+use crate::tasks::compare::task_compare::CompareTask;
 use crate::{
     commons::{
         byte_size_str_to_usize, byte_size_usize_to_str, json_to_struct, struct_to_json_string,

@@ -1,14 +1,15 @@
-use super::{
-    gen_file_path, task_actions::CompareTaskActions, CompareLocal2Local, ObjectStorage,
-    TaskCompareLocal2Oss, TaskCompareOss2Local, TaskCompareOss2Oss, TaskDefaultParameters,
+use crate::commons::{json_to_struct, LastModifyFilter, RegexFilter};
+use crate::tasks::compare::{
+    compare_local2local::CompareLocal2Local, compare_local2oss::TaskCompareLocal2Oss,
+    compare_oss2local::TaskCompareOss2Local, compare_oss2oss::TaskCompareOss2Oss,
+};
+use crate::tasks::{de_usize_from_str, se_usize_to_str};
+use crate::tasks::{
+    gen_file_path, task_actions::CompareTaskActions, ObjectStorage, TaskDefaultParameters,
     TransferStage, COMPARE_CHECK_POINT_FILE, COMPARE_RESULT_PREFIX,
     COMPARE_SOURCE_OBJECT_LIST_FILE_PREFIX, OFFSET_PREFIX,
 };
-use super::{get_task_checkpoint, CheckPoint, FileDescription, FilePosition, ListedRecord};
-use crate::commons::{
-    json_to_struct, promote_processbar, quantify_processbar, LastModifyFilter, RegexFilter,
-};
-use crate::tasks::{de_usize_from_str, se_usize_to_str};
+use crate::tasks::{get_task_checkpoint, FileDescription, FilePosition, ListedRecord};
 use anyhow::anyhow;
 use anyhow::Result;
 use dashmap::DashMap;
@@ -18,14 +19,10 @@ use std::{
     fmt::{self},
     fs::{self, File},
     io::{BufRead, BufReader, Lines, Write},
-    sync::{
-        atomic::{AtomicBool, AtomicUsize},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::Semaphore;
-// use tabled::builder::Builder;
 use tokio::{runtime, task::JoinSet};
 use walkdir::WalkDir;
 
@@ -130,46 +127,12 @@ impl ObjectDiff {
     }
 }
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub struct CompareTaskAttributes {
-//     #[serde(default = "TaskDefaultParameters::objects_per_batch_default")]
-//     pub objects_per_batch: i32,
-//     #[serde(default = "TaskDefaultParameters::task_parallelism_default")]
-//     pub task_parallelism: usize,
-//     // #[serde(default = "TaskDefaultParameters::max_errors_default")]
-//     // pub max_errors: usize,
-//     #[serde(default = "TaskDefaultParameters::meta_dir_default")]
-//     pub meta_dir: String,
-//     #[serde(default = "TaskDefaultParameters::target_exists_skip_default")]
-//     pub start_from_checkpoint: bool,
-//     #[serde(default = "TaskDefaultParameters::large_file_size_default")]
-//     #[serde(serialize_with = "se_usize_to_str")]
-//     #[serde(deserialize_with = "de_usize_from_str")]
-//     pub large_file_size: usize,
-//     #[serde(default = "TaskDefaultParameters::multi_part_chunk_size_default")]
-//     #[serde(serialize_with = "se_usize_to_str")]
-//     #[serde(deserialize_with = "de_usize_from_str")]
-//     pub multi_part_chunk: usize,
-//     #[serde(default = "TaskDefaultParameters::filter_default")]
-//     pub exclude: Option<Vec<String>>,
-//     #[serde(default = "TaskDefaultParameters::filter_default")]
-//     pub include: Option<Vec<String>>,
-//     #[serde(default = "TaskDefaultParameters::exprirs_diff_scope_default")]
-//     pub exprirs_diff_scope: i64,
-//     // #[serde(default = "TaskDefaultParameters::continuous_default")]
-//     // pub continuous: bool,
-//     #[serde(default = "TaskDefaultParameters::last_modify_filter_default")]
-//     pub last_modify_filter: Option<LastModifyFilter>,
-// }
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CompareTaskAttributes {
     #[serde(default = "TaskDefaultParameters::objects_per_batch_default")]
     pub objects_per_batch: i32,
     #[serde(default = "TaskDefaultParameters::task_parallelism_default")]
     pub task_parallelism: usize,
-    // #[serde(default = "TaskDefaultParameters::max_errors_default")]
-    // pub max_errors: usize,
     #[serde(default = "TaskDefaultParameters::meta_dir_default")]
     pub meta_dir: String,
     #[serde(default = "TaskDefaultParameters::target_exists_skip_default")]
@@ -190,8 +153,6 @@ pub struct CompareTaskAttributes {
     pub include: Option<Vec<String>>,
     #[serde(default = "TaskDefaultParameters::exprirs_diff_scope_default")]
     pub exprirs_diff_scope: i64,
-    // #[serde(default = "TaskDefaultParameters::continuous_default")]
-    // pub continuous: bool,
     #[serde(default = "TaskDefaultParameters::last_modify_filter_default")]
     pub last_modify_filter: Option<LastModifyFilter>,
 }
@@ -391,30 +352,12 @@ impl CompareTask {
 
             let task_id = self.task_id.clone();
 
-            // 启动checkpoint记录线程
-            // let stock_status_saver = TaskStatusSaver {
-            //     check_point_path: check_point_file.clone(),
-            //     executed_file: compare_list_file_desc.clone(),
-            //     stop_mark: Arc::clone(&task_stop_mark),
-            //     list_file_positon_map: Arc::clone(&offset_map),
-            //     file_for_notify: None,
-            //     task_stage: TransferStage::Stock,
-            //     interval: 3,
-            // };
-
-            // sys_set.spawn(async move {
-            //     stock_status_saver.snapshot_to_file(task_id).await;
-            // });
-
             // 启动进度条线程
             let map = Arc::clone(&offset_map);
             let stop_mark = Arc::clone(&task_stop_mark);
             let total = compare_list_file_desc.total_lines;
             let cp = check_point_file.clone();
-            // sys_set.spawn(async move {
-            //     // Todo 调整进度条
-            //     quantify_processbar(total, stop_mark.clone(), map, &cp, OFFSET_PREFIX).await;
-            // });
+
             let task_compare = self.gen_compare_actions();
             let mut vec_keys = vec![];
             // 按列表传输object from source to target
@@ -503,17 +446,11 @@ impl CompareTask {
 
             checkpoint.executed_file_position = compare_list_file_position;
             checkpoint.save_to_rocksdb_cf();
-            // if let Err(e) = checkpoint.save_to(check_point_file.as_str()) {
-            //     log::error!("{:?}", e);
-            // };
         });
 
         if task_err_occur.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(anyhow!("compare task error"));
         }
-        // Todo
-        // 持续同步逻辑，循环比较不相等记录，并指定校验次数
-        // if self.attributes.continuous {}
 
         for entry in WalkDir::new(&self.attributes.meta_dir)
             .into_iter()
@@ -559,7 +496,6 @@ impl CompareTask {
                 Ok((list_file, list_file_desc, list_file_position))
             }
             false => {
-                // let pd = prompt_processbar("Generating object list ...");
                 let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
                 let compare_source_list = gen_file_path(
                     self.attributes.meta_dir.as_str(),
@@ -569,7 +505,7 @@ impl CompareTask {
                 let _ = fs::remove_dir_all(self.attributes.meta_dir.as_str());
                 let list_file_desc = task.gen_list_file(&compare_source_list).await?;
                 let list_file = File::open(list_file_desc.path.as_str())?;
-                // pd.finish_with_message("object list generated");
+
                 Ok((list_file, list_file_desc, FilePosition::default()))
             }
         };
@@ -579,27 +515,14 @@ impl CompareTask {
 pub fn show_compare_result(result_file: &str) -> Result<Vec<ObjectDiff>> {
     let file = File::open(result_file)?;
     let lines: Lines<BufReader<File>> = BufReader::new(file).lines();
-    // let mut builder = Builder::default();
+
     let mut obj_diff_vec = vec![];
     for line in lines {
         if let Ok(str) = line {
             let result = json_to_struct::<ObjectDiff>(&str)?;
-            // let source = result.source;
-            // let target = result.target;
-            // let diff = result.diff;
-
-            // let raw = vec![source, target, diff.name(), diff.to_string()];
-            // builder.push_record(raw);
             obj_diff_vec.push(result)
         }
     }
 
-    // let header = vec!["source", "target", "diff_type", "diff"];
-    // // builder.set_header(header);
-    // builder.insert_record(0, header);
-
-    // let table = builder.build();
-    // // table.with(Style::ascii_rounded());
-    // println!("{}", table);
     Ok(obj_diff_vec)
 }

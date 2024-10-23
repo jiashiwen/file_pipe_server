@@ -1,13 +1,19 @@
-use super::task_actions::CompareExecutor;
-use super::{
-    gen_file_path, task_actions::CompareTaskActions, CompareCheckOption, CompareTaskAttributes,
-    Diff, DiffContent, DiffExists, DiffLength, FileDescription, FilePosition, ListedRecord,
-    ObjectDiff, COMPARE_RESULT_PREFIX, OFFSET_PREFIX,
+use super::task_compare::{
+    CompareCheckOption, CompareTaskAttributes, Diff, DiffContent, DiffExists, DiffLength,
+    ObjectDiff,
 };
 use crate::commons::scan_folder_files_to_file;
 use crate::commons::RegexFilter;
+use crate::s3::{OSSDescription, OssClient};
+use crate::tasks::task_actions::CompareExecutor;
+use crate::tasks::{
+    gen_file_path, task_actions::CompareTaskActions, FileDescription, FilePosition, ListedRecord,
+    COMPARE_RESULT_PREFIX, OFFSET_PREFIX,
+};
+use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
+use aws_sdk_s3::operation::get_object::GetObjectOutput;
 use dashmap::DashMap;
 use serde::Deserialize;
 use serde::Serialize;
@@ -20,19 +26,20 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
 };
+use tokio::io::AsyncReadExt;
 use tokio::sync::Semaphore;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
-pub struct CompareLocal2Local {
+pub struct TaskCompareLocal2Oss {
     pub source: String,
-    pub target: String,
+    pub target: OSSDescription,
     pub check_option: CompareCheckOption,
     pub attributes: CompareTaskAttributes,
 }
 
 #[async_trait]
-impl CompareTaskActions for CompareLocal2Local {
+impl CompareTaskActions for TaskCompareLocal2Oss {
     async fn gen_list_file(&self, object_list_file: &str) -> Result<FileDescription> {
         let regex_filter =
             RegexFilter::from_vec_option(&self.attributes.exclude, &self.attributes.include)?;
@@ -40,7 +47,7 @@ impl CompareTaskActions for CompareLocal2Local {
             self.source.as_str(),
             &object_list_file,
             regex_filter,
-            self.attributes.last_modify_filter.clone(),
+            self.attributes.last_modify_filter,
         )
     }
 
@@ -51,7 +58,7 @@ impl CompareTaskActions for CompareLocal2Local {
         semaphore: Arc<Semaphore>,
         offset_map: Arc<DashMap<String, FilePosition>>,
     ) -> Arc<dyn CompareExecutor + Send + Sync> {
-        let comparator = Local2LocalRecordsComparator {
+        let comparator = Local2OssRecordsComparator {
             source: self.source.clone(),
             target: self.target.clone(),
             stop_mark,
@@ -65,19 +72,19 @@ impl CompareTaskActions for CompareLocal2Local {
 }
 
 #[derive(Debug, Clone)]
-pub struct Local2LocalRecordsComparator {
+pub struct Local2OssRecordsComparator {
     pub source: String,
-    pub target: String,
+    pub target: OSSDescription,
     pub stop_mark: Arc<AtomicBool>,
     pub err_occur: Arc<AtomicBool>,
     // pub semaphore: Arc<Semaphore>,
     pub offset_map: Arc<DashMap<String, FilePosition>>,
-    pub attributes: CompareTaskAttributes,
     pub check_option: CompareCheckOption,
+    pub attributes: CompareTaskAttributes,
 }
 
 #[async_trait]
-impl CompareExecutor for Local2LocalRecordsComparator {
+impl CompareExecutor for Local2OssRecordsComparator {
     async fn compare_listed_records(&self, records: Vec<ListedRecord>) -> Result<()> {
         let subffix = records[0].offset.to_string();
         let mut offset_key = OFFSET_PREFIX.to_string();
@@ -92,6 +99,8 @@ impl CompareExecutor for Local2LocalRecordsComparator {
             .truncate(true)
             .open(compare_result_file_name.as_str())?;
 
+        let c_t = self.target.gen_oss_client()?;
+
         for record in records {
             if self.stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
                 return Ok(());
@@ -103,10 +112,19 @@ impl CompareExecutor for Local2LocalRecordsComparator {
                     line_num: record.line_num,
                 },
             );
-            let s_key = gen_file_path(self.source.as_str(), record.key.as_str(), "");
-            let t_key = gen_file_path(self.target.as_str(), record.key.as_str(), "");
 
-            match self.compare_listed_record(&record, &s_key, &t_key).await {
+            let s_key = gen_file_path(self.source.as_str(), record.key.as_str(), "");
+
+            let mut target_key = match self.target.prefix.clone() {
+                Some(s) => s,
+                None => "".to_string(),
+            };
+            target_key.push_str(&record.key);
+
+            match self
+                .compare_listed_record(&record, &s_key, &target_key, &c_t)
+                .await
+            {
                 Ok(r) => {
                     if let Some(diff) = r {
                         let _ = diff.save_json_to_file(&mut compare_result_file);
@@ -115,6 +133,7 @@ impl CompareExecutor for Local2LocalRecordsComparator {
                 Err(e) => {
                     self.stop_mark
                         .store(true, std::sync::atomic::Ordering::SeqCst);
+
                     log::error!("{:?}", e);
                 }
             };
@@ -139,22 +158,41 @@ impl CompareExecutor for Local2LocalRecordsComparator {
     }
 }
 
-impl Local2LocalRecordsComparator {
+impl Local2OssRecordsComparator {
     async fn compare_listed_record(
         &self,
         record: &ListedRecord,
         source_key: &str,
         target_key: &str,
+        target: &OssClient,
     ) -> Result<Option<ObjectDiff>> {
         let s_path = Path::new(source_key);
-        let t_path = Path::new(target_key);
-
         let s_exists = s_path.exists();
-        let t_exists = t_path.exists();
+
+        let mut t_exists = false;
+        let mut obj_t = GetObjectOutput::builder().build();
+
+        match target
+            .get_object(&self.target.bucket.as_str(), &target_key)
+            .await
+        {
+            core::result::Result::Ok(o) => {
+                t_exists = true;
+                obj_t = o;
+            }
+            Err(e) => {
+                // 源端文件不存在按传输成功处理
+                let service_err = e.into_service_error();
+                match service_err.is_no_such_key() {
+                    true => {}
+                    false => return Err(service_err.into()),
+                }
+            }
+        };
 
         if !s_exists.eq(&t_exists) {
             let diff = ObjectDiff {
-                source: source_key.to_string(),
+                source: record.key.to_string(),
                 target: target_key.to_string(),
                 diff: Diff::ExistsDiff(DiffExists {
                     source_exists: s_exists,
@@ -170,13 +208,16 @@ impl Local2LocalRecordsComparator {
         }
 
         if self.check_option.check_content_length() {
-            if let Some(diff) = self.compare_content_len(record, source_key, target_key)? {
+            if let Some(diff) = self.compare_content_len(record, source_key, &obj_t, &target_key)? {
                 return Ok(Some(diff));
             }
         }
 
         if self.check_option.check_content() {
-            if let Some(diff) = self.compare_content(record, source_key, target_key)? {
+            if let Some(diff) = self
+                .compare_content(record, source_key, obj_t, &target_key)
+                .await?
+            {
                 return Ok(Some(diff));
             }
         }
@@ -188,12 +229,17 @@ impl Local2LocalRecordsComparator {
         &self,
         record: &ListedRecord,
         source_key: &str,
+        t_obj: &GetObjectOutput,
         target_key: &str,
     ) -> Result<Option<ObjectDiff>> {
         let s_file = File::open(source_key)?;
-        let t_file = File::open(target_key)?;
         let len_s = i128::from(s_file.metadata()?.len());
-        let len_t = i128::from(t_file.metadata()?.len());
+        // let len_t = i128::from(t_obj.content_length());
+        let len_t = match t_obj.content_length() {
+            Some(l) => i128::from(l),
+            None => return Err(anyhow!("content length is None")),
+        };
+
         if !len_s.eq(&len_t) {
             let diff = ObjectDiff {
                 source: record.key.clone(),
@@ -208,31 +254,36 @@ impl Local2LocalRecordsComparator {
         Ok(None)
     }
 
-    fn compare_content(
+    async fn compare_content(
         &self,
         record: &ListedRecord,
         source_key: &str,
+        t_obj: GetObjectOutput,
         target_key: &str,
     ) -> Result<Option<ObjectDiff>> {
         let buffer_size = 1048577;
         let mut s_file = File::open(source_key)?;
-        let mut t_file = File::open(target_key)?;
         let s_len = TryInto::<usize>::try_into(s_file.metadata()?.len())?;
-
         let mut left = s_len;
+
+        let mut reader_t = t_obj.body.into_async_read();
 
         loop {
             let mut buf_s = vec![0; buffer_size];
             let mut buf_t = vec![0; buffer_size];
-
-            let read_count_s = s_file.read(&mut buf_s)?;
-            let read_count_t = t_file.read(&mut buf_t)?;
-            let buf_c_s = &buf_s[..read_count_s];
-            let buf_c_t = &buf_t[..read_count_t];
-            left -= read_count_s;
-
-            if !buf_c_s.eq(buf_c_t) {
-                for (idx, byte) in buf_c_s.iter().enumerate() {
+            if left > buffer_size {
+                let _ = s_file.read(&mut buf_s)?;
+                let _ = reader_t.read_exact(&mut buf_t).await?;
+                left -= buffer_size;
+            } else {
+                buf_s = vec![0; left];
+                buf_t = vec![0; left];
+                let _ = s_file.read(&mut buf_s)?;
+                let _ = reader_t.read_exact(&mut buf_t).await?;
+                break;
+            }
+            if !buf_s.eq(&buf_t) {
+                for (idx, byte) in buf_s.iter().enumerate() {
                     if !byte.eq(&buf_t[idx]) {
                         let diff = DiffContent {
                             stream_position: s_len - left + idx,
@@ -248,10 +299,6 @@ impl Local2LocalRecordsComparator {
                         return Ok(Some(obj_diff));
                     }
                 }
-            }
-
-            if read_count_s != buffer_size {
-                break;
             }
         }
         Ok(None)

@@ -1,11 +1,14 @@
-use super::task_actions::CompareExecutor;
-use super::{
-    gen_file_path, task_actions::CompareTaskActions, CompareCheckOption, CompareTaskAttributes,
-    DateTime, Diff, DiffContent, DiffExists, DiffExpires, DiffLength, DiffMeta, FileDescription,
-    FilePosition, ListedRecord, ObjectDiff, COMPARE_RESULT_PREFIX, OFFSET_PREFIX,
+use super::task_compare::{
+    CompareCheckOption, CompareTaskAttributes, DateTime, Diff, DiffContent, DiffExists,
+    DiffExpires, DiffLength, DiffMeta, ObjectDiff,
 };
 use crate::commons::RegexFilter;
 use crate::s3::{OSSDescription, OssClient};
+use crate::tasks::task_actions::CompareExecutor;
+use crate::tasks::{
+    gen_file_path, task_actions::CompareTaskActions, FileDescription, FilePosition, ListedRecord,
+    COMPARE_RESULT_PREFIX, OFFSET_PREFIX,
+};
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
