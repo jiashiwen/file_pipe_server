@@ -196,7 +196,6 @@ fn cmd_match(matches: &ArgMatches) {
     if let Some(ref _matches) = matches.subcommand_matches("stop") {
         println!("server stopping...");
 
-        // let sys = System::new_with_specifics(RefreshKind::everything().without_disks_list());
         let sys =
             System::new_with_specifics(RefreshKind::everything().without_cpu().without_memory());
 

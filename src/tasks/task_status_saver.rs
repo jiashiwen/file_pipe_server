@@ -1,3 +1,4 @@
+use crate::configure::get_config;
 use crate::resources::get_checkpoint;
 use crate::resources::living_tasks;
 use crate::tasks::FilePosition;
@@ -8,6 +9,7 @@ use once_cell::sync::Lazy;
 use std::sync::{atomic::AtomicBool, Arc};
 use tokio::runtime;
 use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 use tokio::{sync::RwLock, task::JoinSet};
 
 pub static GLOBAL_TASK_RUNTIME: Lazy<Arc<Runtime>> = Lazy::new(|| {
@@ -36,21 +38,15 @@ pub static GLOBAL_TASKS_EXEC_JOINSET: Lazy<DashMap<String, Arc<RwLock<JoinSet<()
 //         map
 //     });
 
+pub static GLOBAL_SEMAPHORE_FOR_TASK: Lazy<Arc<Semaphore>> = Lazy::new(|| {
+    let permits = get_config().unwrap().max_server_task_parallelism;
+    let semaphore = Semaphore::const_new(permits);
+    Arc::new(semaphore)
+});
+
 pub static GLOBAL_TASK_STOP_MARK_MAP: Lazy<Arc<DashMap<String, Arc<AtomicBool>>>> =
     Lazy::new(|| {
         let map = DashMap::<String, Arc<AtomicBool>>::new();
-        Arc::new(map)
-    });
-
-// pub static GLOBAL_LIVING_COMPARE_TASK_MAP: Lazy<Arc<DashMap<String, TransferTaskStatus>>> =
-//     Lazy::new(|| {
-//         let map = DashMap::<String, TransferTaskStatus>::new();
-//         Arc::new(map)
-//     });
-
-pub static GLOBAL_LIST_FILE_POSITON_MAP: Lazy<Arc<DashMap<String, FilePosition>>> =
-    Lazy::new(|| {
-        let map = DashMap::<String, FilePosition>::new();
         Arc::new(map)
     });
 

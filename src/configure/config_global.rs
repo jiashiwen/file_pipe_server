@@ -18,6 +18,7 @@ pub struct Config {
     pub http: HttpConfig,
     pub rocksdb: RocksDBConfig,
     pub meta_dir: String,
+    pub max_server_task_parallelism: usize,
 }
 
 impl Config {
@@ -26,6 +27,7 @@ impl Config {
             http: HttpConfig::default(),
             meta_dir: "meta_dir".to_string(),
             rocksdb: RocksDBConfig::default(),
+            max_server_task_parallelism: num_cpus::get(),
         }
     }
 
