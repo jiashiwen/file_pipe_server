@@ -255,7 +255,11 @@ impl Task {
                 let mut task_status = match get_task_status(&transfer.task_id) {
                     Ok(s) => s,
                     Err(e) => {
-                        log::error!("{}", e);
+                        let err = TaskError {
+                            task_id: self.task_id(),
+                            error: e,
+                        };
+                        log::error!("{:?}", err);
                         return;
                     }
                 };
@@ -279,10 +283,6 @@ impl Task {
                         log::error!("{}", err);
                         task_status.status =
                             Status::Transfer(TransferStatus::Stopped(TaskStopReason::Broken));
-                        // log::error!(
-                        //     "{:?}",
-                        //     e.context(format!("{},{}:{}", self.task_id(), file!(), line!()))
-                        // );
                     }
                 }
 

@@ -76,15 +76,25 @@ impl FromStr for RecordOption {
 
 impl RecordOption {
     //Todo 新增stop_mark 参数，在err_count 达到阈值时变更stop_mark
+    // pub fn handle_error(
+    //     &self,
+    //     stop_mark: Arc<AtomicBool>,
+    //     err_occur: Arc<AtomicBool>,
+    //     append_to: &str,
+    // ) {
+    //     err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
+    //     stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+    //     let _ = self.append_json_to_file(append_to);
+    // }
     pub fn handle_error(
         &self,
         stop_mark: Arc<AtomicBool>,
         err_occur: Arc<AtomicBool>,
-        append_to: &str,
+        // append_to: &str,
     ) {
         err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
         stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
-        let _ = self.append_json_to_file(append_to);
+        // let _ = self.append_json_to_file(append_to);
     }
 
     pub fn save_json_to_file(&self, mut file: &File) -> Result<()> {

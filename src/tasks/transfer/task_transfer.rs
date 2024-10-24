@@ -212,7 +212,6 @@ impl Default for TransferTaskAttributes {
         Self {
             objects_per_batch: TaskDefaultParameters::objects_per_batch_default(),
             task_parallelism: TaskDefaultParameters::task_parallelism_default(),
-            // max_errors: TaskDefaultParameters::max_errors_default(),
             meta_dir: TaskDefaultParameters::meta_dir_default(),
             target_exists_skip: TaskDefaultParameters::target_exists_skip_default(),
             start_from_checkpoint: TaskDefaultParameters::target_exists_skip_default(),
@@ -609,9 +608,9 @@ impl TransferTask {
                     get_checkpoint(&self.task_id).context(format!("{}:{}", file!(), line!()))?;
 
                 // 执行error retry
-                task.error_record_retry(stop_mark.clone(), semaphore.clone())
-                    .await
-                    .context(format!("{}:{}", file!(), line!()))?;
+                // task.error_record_retry(stop_mark.clone(), semaphore.clone())
+                //     .await
+                //     .context(format!("{}:{}", file!(), line!()))?;
 
                 // 清理notify file
                 for entry in WalkDir::new(&self.attributes.meta_dir)

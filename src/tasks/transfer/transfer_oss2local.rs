@@ -74,63 +74,63 @@ impl TransferTaskActions for TransferOss2Local {
             .await
     }
 
-    async fn error_record_retry(
-        &self,
-        stop_mark: Arc<AtomicBool>,
-        semaphore: Arc<Semaphore>,
-    ) -> Result<()> {
-        // 遍历错误记录
-        // 每个错误文件重新处理
-        for entry in WalkDir::new(self.attributes.meta_dir.as_str())
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|e| !e.file_type().is_dir() && e.file_name().to_str().is_some())
-        {
-            let file_name = match entry.file_name().to_str() {
-                Some(name) => name,
-                None => {
-                    continue;
-                }
-            };
+    // async fn error_record_retry(
+    //     &self,
+    //     stop_mark: Arc<AtomicBool>,
+    //     semaphore: Arc<Semaphore>,
+    // ) -> Result<()> {
+    //     // 遍历错误记录
+    //     // 每个错误文件重新处理
+    //     for entry in WalkDir::new(self.attributes.meta_dir.as_str())
+    //         .into_iter()
+    //         .filter_map(Result::ok)
+    //         .filter(|e| !e.file_type().is_dir() && e.file_name().to_str().is_some())
+    //     {
+    //         let file_name = match entry.file_name().to_str() {
+    //             Some(name) => name,
+    //             None => {
+    //                 continue;
+    //             }
+    //         };
 
-            if !file_name.starts_with(TRANSFER_ERROR_RECORD_PREFIX) {
-                continue;
-            };
+    //         if !file_name.starts_with(TRANSFER_ERROR_RECORD_PREFIX) {
+    //             continue;
+    //         };
 
-            if let Some(p) = entry.path().to_str() {
-                if let Ok(lines) = read_lines(p) {
-                    let mut record_vec = vec![];
-                    for line in lines {
-                        match line {
-                            Ok(content) => {
-                                let record = json_to_struct::<RecordOption>(content.as_str())?;
-                                record_vec.push(record);
-                            }
-                            Err(e) => {
-                                log::error!("{}", e);
-                                return Err(anyhow!("{}", e));
-                            }
-                        }
-                    }
+    //         if let Some(p) = entry.path().to_str() {
+    //             if let Ok(lines) = read_lines(p) {
+    //                 let mut record_vec = vec![];
+    //                 for line in lines {
+    //                     match line {
+    //                         Ok(content) => {
+    //                             let record = json_to_struct::<RecordOption>(content.as_str())?;
+    //                             record_vec.push(record);
+    //                         }
+    //                         Err(e) => {
+    //                             log::error!("{}", e);
+    //                             return Err(anyhow!("{}", e));
+    //                         }
+    //                     }
+    //                 }
 
-                    if record_vec.len() > 0 {
-                        let executor = self.gen_transfer_executor(
-                            stop_mark.clone(),
-                            Arc::new(AtomicBool::new(false)),
-                            semaphore.clone(),
-                            Arc::new(DashMap::<String, FilePosition>::new()),
-                            p.to_string(),
-                        );
-                        executor.transfer_record_options(record_vec).await;
-                    }
-                }
+    //                 if record_vec.len() > 0 {
+    //                     let executor = self.gen_transfer_executor(
+    //                         stop_mark.clone(),
+    //                         Arc::new(AtomicBool::new(false)),
+    //                         semaphore.clone(),
+    //                         Arc::new(DashMap::<String, FilePosition>::new()),
+    //                         p.to_string(),
+    //                     );
+    //                     executor.transfer_record_options(record_vec).await;
+    //                 }
+    //             }
 
-                let _ = fs::remove_file(p);
-            }
-        }
+    //             let _ = fs::remove_file(p);
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn gen_transfer_executor(
         &self,
@@ -540,17 +540,17 @@ impl TransferExecutor for TransferOss2LocalRecordsExecutor {
         let mut offset_key = OFFSET_PREFIX.to_string();
         offset_key.push_str(&subffix);
 
-        let error_file_name = gen_file_path(
-            &self.attributes.meta_dir,
-            TRANSFER_ERROR_RECORD_PREFIX,
-            &subffix,
-        );
+        // let error_file_name = gen_file_path(
+        //     &self.attributes.meta_dir,
+        //     TRANSFER_ERROR_RECORD_PREFIX,
+        //     &subffix,
+        // );
 
-        let mut error_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(error_file_name.as_str())?;
+        // let mut error_file = OpenOptions::new()
+        //     .create(true)
+        //     .write(true)
+        //     .truncate(true)
+        //     .open(error_file_name.as_str())?;
 
         let c_s = self.source.gen_oss_client()?;
         for record in records {
@@ -574,11 +574,7 @@ impl TransferExecutor for TransferOss2LocalRecordsExecutor {
                     },
                     option: Opt::PUT,
                 };
-                record_option.handle_error(
-                    self.stop_mark.clone(),
-                    self.err_occur.clone(),
-                    &error_file_name,
-                );
+                record_option.handle_error(self.stop_mark.clone(), self.err_occur.clone());
                 self.err_occur
                     .store(true, std::sync::atomic::Ordering::SeqCst);
                 self.stop_mark
@@ -597,15 +593,15 @@ impl TransferExecutor for TransferOss2LocalRecordsExecutor {
         }
 
         self.offset_map.remove(&offset_key);
-        let _ = error_file.flush();
-        match error_file.metadata() {
-            Ok(meta) => {
-                if meta.len() == 0 {
-                    let _ = fs::remove_file(error_file_name.as_str());
-                }
-            }
-            Err(_) => {}
-        };
+        // let _ = error_file.flush();
+        // match error_file.metadata() {
+        //     Ok(meta) => {
+        //         if meta.len() == 0 {
+        //             let _ = fs::remove_file(error_file_name.as_str());
+        //         }
+        //     }
+        //     Err(_) => {}
+        // };
 
         Ok(())
     }
@@ -619,17 +615,17 @@ impl TransferExecutor for TransferOss2LocalRecordsExecutor {
         subffix.push_str("_");
         subffix.push_str(now.as_secs().to_string().as_str());
 
-        let error_file_name = gen_file_path(
-            &self.attributes.meta_dir,
-            TRANSFER_ERROR_RECORD_PREFIX,
-            &subffix,
-        );
+        // let error_file_name = gen_file_path(
+        //     &self.attributes.meta_dir,
+        //     TRANSFER_ERROR_RECORD_PREFIX,
+        //     &subffix,
+        // );
 
-        let mut error_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(error_file_name.as_str())?;
+        // let mut error_file = OpenOptions::new()
+        //     .create(true)
+        //     .write(true)
+        //     .truncate(true)
+        //     .open(error_file_name.as_str())?;
 
         let source_client = self.source.gen_oss_client()?;
 
@@ -656,25 +652,21 @@ impl TransferExecutor for TransferOss2LocalRecordsExecutor {
                         .insert(offset_key.clone(), record.list_file_position.clone());
                 }
                 Err(e) => {
-                    record.handle_error(
-                        self.stop_mark.clone(),
-                        self.err_occur.clone(),
-                        &error_file_name,
-                    );
+                    record.handle_error(self.stop_mark.clone(), self.err_occur.clone());
                     log::error!("{:?},{:?}", e, record);
                 }
             };
         }
         self.offset_map.remove(&offset_key);
-        let _ = error_file.flush();
-        match error_file.metadata() {
-            Ok(meta) => {
-                if meta.len() == 0 {
-                    let _ = fs::remove_file(error_file_name.as_str());
-                }
-            }
-            Err(_) => {}
-        };
+        // let _ = error_file.flush();
+        // match error_file.metadata() {
+        //     Ok(meta) => {
+        //         if meta.len() == 0 {
+        //             let _ = fs::remove_file(error_file_name.as_str());
+        //         }
+        //     }
+        //     Err(_) => {}
+        // };
 
         Ok(())
     }

@@ -15,3 +15,6 @@
 - [ ] 使用Semaphore控制分片上传的并行度
 - [ ] 日志输出整理，输出task_id
 - [ ] 模块重构，将compare 和 transfer 任务分离成单独模块
+- [ ] 移除error file 改用日志记录错误
+- [ ] 移除 error_retry,精确checkpoint，保证记录最小迁移成功的object
+- [ ] 任务创建时新增检查功能，检查项，源是否可读，目标是否可写

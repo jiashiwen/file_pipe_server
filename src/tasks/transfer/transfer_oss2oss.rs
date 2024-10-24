@@ -77,56 +77,56 @@ impl TransferTaskActions for TransferOss2Oss {
     }
 
     // 错误记录重试
-    async fn error_record_retry(
-        &self,
-        stop_mark: Arc<AtomicBool>,
-        semaphore: Arc<Semaphore>,
-    ) -> Result<()> {
-        for entry in WalkDir::new(self.attributes.meta_dir.as_str())
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|e| !e.file_type().is_dir() && e.file_name().to_str().is_some())
-        {
-            let file_name = entry.file_name().to_str().unwrap();
+    // async fn error_record_retry(
+    //     &self,
+    //     stop_mark: Arc<AtomicBool>,
+    //     semaphore: Arc<Semaphore>,
+    // ) -> Result<()> {
+    //     for entry in WalkDir::new(self.attributes.meta_dir.as_str())
+    //         .into_iter()
+    //         .filter_map(Result::ok)
+    //         .filter(|e| !e.file_type().is_dir() && e.file_name().to_str().is_some())
+    //     {
+    //         let file_name = entry.file_name().to_str().unwrap();
 
-            if !file_name.starts_with(TRANSFER_ERROR_RECORD_PREFIX) {
-                continue;
-            };
+    //         if !file_name.starts_with(TRANSFER_ERROR_RECORD_PREFIX) {
+    //             continue;
+    //         };
 
-            if let Some(p) = entry.path().to_str() {
-                if let Ok(lines) = read_lines(p) {
-                    let mut record_vec = vec![];
-                    for line in lines {
-                        match line {
-                            Ok(content) => {
-                                let record = json_to_struct::<RecordOption>(content.as_str())?;
-                                record_vec.push(record);
-                            }
-                            Err(e) => {
-                                log::error!("{:?}", e);
-                                return Err(anyhow!("{}", e));
-                            }
-                        }
-                    }
+    //         if let Some(p) = entry.path().to_str() {
+    //             if let Ok(lines) = read_lines(p) {
+    //                 let mut record_vec = vec![];
+    //                 for line in lines {
+    //                     match line {
+    //                         Ok(content) => {
+    //                             let record = json_to_struct::<RecordOption>(content.as_str())?;
+    //                             record_vec.push(record);
+    //                         }
+    //                         Err(e) => {
+    //                             log::error!("{:?}", e);
+    //                             return Err(anyhow!("{}", e));
+    //                         }
+    //                     }
+    //                 }
 
-                    if record_vec.len() > 0 {
-                        let executor = self.gen_transfer_executor(
-                            stop_mark.clone(),
-                            Arc::new(AtomicBool::new(false)),
-                            semaphore.clone(),
-                            Arc::new(DashMap::<String, FilePosition>::new()),
-                            p.to_string(),
-                        );
-                        let _ = executor.transfer_record_options(record_vec);
-                    }
-                }
+    //                 if record_vec.len() > 0 {
+    //                     let executor = self.gen_transfer_executor(
+    //                         stop_mark.clone(),
+    //                         Arc::new(AtomicBool::new(false)),
+    //                         semaphore.clone(),
+    //                         Arc::new(DashMap::<String, FilePosition>::new()),
+    //                         p.to_string(),
+    //                     );
+    //                     let _ = executor.transfer_record_options(record_vec);
+    //                 }
+    //             }
 
-                let _ = fs::remove_file(p);
-            }
-        }
+    //             let _ = fs::remove_file(p);
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn gen_transfer_executor(
         &self,
@@ -606,19 +606,19 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
         let mut offset_key = OFFSET_PREFIX.to_string();
         offset_key.push_str(&subffix);
 
-        let error_file_name = gen_file_path(
-            &self.attributes.meta_dir,
-            TRANSFER_ERROR_RECORD_PREFIX,
-            &subffix,
-        );
+        // let error_file_name = gen_file_path(
+        //     &self.attributes.meta_dir,
+        //     TRANSFER_ERROR_RECORD_PREFIX,
+        //     &subffix,
+        // );
 
-        {
-            let _ = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(error_file_name.as_str())?;
-        }
+        // {
+        //     let _ = OpenOptions::new()
+        //         .create(true)
+        //         .write(true)
+        //         .truncate(true)
+        //         .open(error_file_name.as_str())?;
+        // }
 
         let source_client = self.source.gen_oss_client()?;
         let target_client = self.target.gen_oss_client()?;
@@ -660,11 +660,7 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
                         },
                         option: Opt::PUT,
                     };
-                    record_option.handle_error(
-                        self.stop_mark.clone(),
-                        self.err_occur.clone(),
-                        &error_file_name,
-                    );
+                    record_option.handle_error(self.stop_mark.clone(), self.err_occur.clone());
                     log::error!("{:?} {:?}", e, record_option);
                 }
             }
@@ -672,24 +668,24 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
 
         self.offset_map.remove(&offset_key);
 
-        let error_file = match File::open(&error_file_name) {
-            Ok(f) => f,
-            Err(e) => {
-                self.err_occur
-                    .store(true, std::sync::atomic::Ordering::SeqCst);
-                log::error!("{:?}", e);
-                // return Err(anyhow!(e));
-                return Err(anyhow::Error::new(e));
-            }
-        };
-        match error_file.metadata() {
-            Ok(meta) => {
-                if meta.len() == 0 {
-                    let _ = fs::remove_file(error_file_name.as_str());
-                }
-            }
-            Err(_) => {}
-        };
+        // let error_file = match File::open(&error_file_name) {
+        //     Ok(f) => f,
+        //     Err(e) => {
+        //         self.err_occur
+        //             .store(true, std::sync::atomic::Ordering::SeqCst);
+        //         log::error!("{:?}", e);
+        //         // return Err(anyhow!(e));
+        //         return Err(anyhow::Error::new(e));
+        //     }
+        // };
+        // match error_file.metadata() {
+        //     Ok(meta) => {
+        //         if meta.len() == 0 {
+        //             let _ = fs::remove_file(error_file_name.as_str());
+        //         }
+        //     }
+        //     Err(_) => {}
+        // };
 
         Ok(())
     }
@@ -703,19 +699,19 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
         subffix.push_str("_");
         subffix.push_str(now.as_secs().to_string().as_str());
 
-        let error_file_name = gen_file_path(
-            &self.attributes.meta_dir,
-            TRANSFER_ERROR_RECORD_PREFIX,
-            &subffix,
-        );
+        // let error_file_name = gen_file_path(
+        //     &self.attributes.meta_dir,
+        //     TRANSFER_ERROR_RECORD_PREFIX,
+        //     &subffix,
+        // );
 
-        let error_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(error_file_name.as_str())?;
+        // let error_file = OpenOptions::new()
+        //     .create(true)
+        //     .write(true)
+        //     .truncate(true)
+        //     .open(error_file_name.as_str())?;
 
-        drop(error_file);
+        // drop(error_file);
 
         let s_client = self.source.gen_oss_client()?;
         let t_client = self.target.gen_oss_client()?;
@@ -728,11 +724,7 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
             }
 
             if let Err(e) = self.record_description_handler(&s_c, &t_c, &record).await {
-                record.handle_error(
-                    self.stop_mark.clone(),
-                    self.err_occur.clone(),
-                    &error_file_name,
-                );
+                record.handle_error(self.stop_mark.clone(), self.err_occur.clone());
                 self.err_occur
                     .store(true, std::sync::atomic::Ordering::SeqCst);
                 self.stop_mark
@@ -746,23 +738,23 @@ impl TransferExecutor for TransferOss2OssRecordsExecutor {
         }
         self.offset_map.remove(&offset_key);
 
-        let error_file = match File::open(&error_file_name) {
-            Ok(f) => f,
-            Err(e) => {
-                self.err_occur
-                    .store(true, std::sync::atomic::Ordering::SeqCst);
-                log::error!("{:?}", e);
-                return Err(anyhow!(e));
-            }
-        };
-        match error_file.metadata() {
-            Ok(meta) => {
-                if meta.len() == 0 {
-                    let _ = fs::remove_file(error_file_name.as_str());
-                }
-            }
-            Err(_) => {}
-        };
+        // let error_file = match File::open(&error_file_name) {
+        //     Ok(f) => f,
+        //     Err(e) => {
+        //         self.err_occur
+        //             .store(true, std::sync::atomic::Ordering::SeqCst);
+        //         log::error!("{:?}", e);
+        //         return Err(anyhow!(e));
+        //     }
+        // };
+        // match error_file.metadata() {
+        //     Ok(meta) => {
+        //         if meta.len() == 0 {
+        //             let _ = fs::remove_file(error_file_name.as_str());
+        //         }
+        //     }
+        //     Err(_) => {}
+        // };
 
         Ok(())
     }

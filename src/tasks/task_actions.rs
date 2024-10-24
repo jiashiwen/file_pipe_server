@@ -18,13 +18,13 @@ use tokio::{
 #[async_trait]
 pub trait TransferTaskActions {
     async fn analyze_source(&self) -> Result<BTreeMap<String, i128>>;
-    // async fn analyze_source(&self) -> Result<DashMap<usize, i128>>;
+
     // 错误记录重试
-    async fn error_record_retry(
-        &self,
-        stop_mark: Arc<AtomicBool>,
-        semaphore: Arc<Semaphore>,
-    ) -> Result<()>;
+    // async fn error_record_retry(
+    //     &self,
+    //     stop_mark: Arc<AtomicBool>,
+    //     semaphore: Arc<Semaphore>,
+    // ) -> Result<()>;
 
     fn gen_transfer_executor(
         &self,
