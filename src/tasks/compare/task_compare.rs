@@ -305,12 +305,12 @@ impl CompareTask {
         }
     }
 
-    pub fn start_compare(&self) -> Result<()> {
-        let rt = runtime::Builder::new_multi_thread()
-            .worker_threads(num_cpus::get())
-            .enable_all()
-            .max_io_events_per_tick(self.attributes.task_parallelism)
-            .build()?;
+    pub async fn start_compare(&self) -> Result<()> {
+        // let rt = runtime::Builder::new_multi_thread()
+        //     .worker_threads(num_cpus::get())
+        //     .enable_all()
+        //     .max_io_events_per_tick(self.attributes.task_parallelism)
+        //     .build()?;
 
         // sys_set 用于执行checkpoint、notify等辅助任务
         // let mut sys_set = JoinSet::new();
@@ -331,123 +331,92 @@ impl CompareTask {
         let regex_filter =
             RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include)?;
 
-        rt.block_on(async {
-            let task_compare = self.gen_compare_actions();
+        // rt.block_on(async {
+        let task_compare = self.gen_compare_actions();
 
-            let (compare_list_file, compare_list_file_desc, mut compare_list_file_position) =
-                match self
-                    .generate_list_file(
-                        task_stop_mark.clone(),
-                        task_multi_part_semaphore.clone(),
-                        task_compare,
-                    )
-                    .await
-                {
-                    Ok((f, d, p)) => (f, d, p),
-                    Err(e) => {
-                        log::error!("{:?}", e);
-                        task_err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
-                        return;
+        let (compare_list_file, compare_list_file_desc, mut compare_list_file_position) = self
+            .generate_list_file(
+                task_stop_mark.clone(),
+                task_multi_part_semaphore.clone(),
+                task_compare,
+            )
+            .await?;
+
+        let task_id = self.task_id.clone();
+
+        let map = Arc::clone(&offset_map);
+        let stop_mark = Arc::clone(&task_stop_mark);
+        let total = compare_list_file_desc.total_lines;
+        let cp = check_point_file.clone();
+
+        let task_compare = self.gen_compare_actions();
+        let mut vec_keys = vec![];
+        // 按列表传输object from source to target
+        let lines: Lines<BufReader<File>> = BufReader::new(compare_list_file).lines();
+        let s_m = task_stop_mark.clone();
+        let to_be_executed =
+            TryInto::<usize>::try_into(total - compare_list_file_position.line_num)?;
+
+        let obj_perbatch = TryInto::<usize>::try_into((self.attributes.objects_per_batch))?;
+
+        for (idx, line) in lines.enumerate() {
+            if s_m.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
+            if let Result::Ok(key) = line {
+                let len = key.bytes().len() + "\n".bytes().len();
+                if !key.ends_with("/") {
+                    let record = ListedRecord {
+                        key,
+                        offset: compare_list_file_position.offset,
+                        line_num: compare_list_file_position.line_num,
+                    };
+
+                    if !regex_filter.is_match(&record.key) {
+                        continue;
                     }
-                };
+                    vec_keys.push(record);
+                }
+                compare_list_file_position.offset += len;
+                compare_list_file_position.line_num += 1;
+            };
 
-            let task_id = self.task_id.clone();
-
-            // 启动进度条线程
-            let map = Arc::clone(&offset_map);
-            let stop_mark = Arc::clone(&task_stop_mark);
-            let total = compare_list_file_desc.total_lines;
-            let cp = check_point_file.clone();
-
-            let task_compare = self.gen_compare_actions();
-            let mut vec_keys = vec![];
-            // 按列表传输object from source to target
-            let lines: Lines<BufReader<File>> = BufReader::new(compare_list_file).lines();
-            let s_m = task_stop_mark.clone();
-            let to_be_executed =
-                match TryInto::<usize>::try_into(total - compare_list_file_position.line_num) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        log::error!("{:?}", e);
-                        task_err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
-                        return;
-                    }
-                };
-            let obj_perbatch = match TryInto::<usize>::try_into((self.attributes.objects_per_batch))
+            if vec_keys.len().eq(&obj_perbatch)
+                || idx.eq(&(to_be_executed - 1)) && vec_keys.len() > 0
             {
-                Ok(t) => t,
-                Err(e) => {
-                    log::error!("{:?}", e);
-                    task_err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
-                    return;
+                while execut_set.len() >= self.attributes.task_parallelism {
+                    execut_set.join_next().await;
                 }
-            };
-
-            for (idx, line) in lines.enumerate() {
-                if s_m.load(std::sync::atomic::Ordering::SeqCst) {
-                    break;
-                }
-                if let Result::Ok(key) = line {
-                    let len = key.bytes().len() + "\n".bytes().len();
-                    if !key.ends_with("/") {
-                        let record = ListedRecord {
-                            key,
-                            offset: compare_list_file_position.offset,
-                            line_num: compare_list_file_position.line_num,
-                        };
-
-                        if !regex_filter.is_match(&record.key) {
-                            continue;
-                        }
-                        vec_keys.push(record);
+                let vk = vec_keys.clone();
+                let comparator = task_compare.gen_compare_executor(
+                    task_stop_mark.clone(),
+                    task_err_occur.clone(),
+                    task_multi_part_semaphore.clone(),
+                    offset_map.clone(),
+                );
+                execut_set.spawn(async move {
+                    if let Err(e) = comparator.compare_listed_records(vk).await {
+                        log::error!("{:?}", e);
                     }
-                    compare_list_file_position.offset += len;
-                    compare_list_file_position.line_num += 1;
-                };
+                });
 
-                if vec_keys.len().eq(&obj_perbatch)
-                    || idx.eq(&(to_be_executed - 1)) && vec_keys.len() > 0
-                {
-                    while execut_set.len() >= self.attributes.task_parallelism {
-                        execut_set.join_next().await;
-                    }
-                    let vk = vec_keys.clone();
-                    let comparator = task_compare.gen_compare_executor(
-                        task_stop_mark.clone(),
-                        task_err_occur.clone(),
-                        task_multi_part_semaphore.clone(),
-                        offset_map.clone(),
-                    );
-                    execut_set.spawn(async move {
-                        if let Err(e) = comparator.compare_listed_records(vk).await {
-                            log::error!("{:?}", e);
-                        }
-                    });
-
-                    // 清理临时key vec
-                    vec_keys.clear();
-                }
+                // 清理临时key vec
+                vec_keys.clear();
             }
+        }
 
-            while execut_set.len() > 0 {
-                execut_set.join_next().await;
-            }
-            // 配置停止 offset save 标识为 true
-            task_stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
+        while execut_set.len() > 0 {
+            execut_set.join_next().await;
+        }
+        // 配置停止 offset save 标识为 true
+        task_stop_mark.store(true, std::sync::atomic::Ordering::SeqCst);
 
-            log::info!("{:?}", compare_list_file_position);
+        log::info!("{:?}", compare_list_file_position);
 
-            let mut checkpoint = match get_task_checkpoint(check_point_file.as_str()) {
-                Ok(c) => c,
-                Err(e) => {
-                    log::error!("{:?}", e);
-                    return;
-                }
-            };
+        let mut checkpoint = get_task_checkpoint(check_point_file.as_str())?;
 
-            checkpoint.executed_file_position = compare_list_file_position;
-            checkpoint.save_to_rocksdb_cf();
-        });
+        checkpoint.executed_file_position = compare_list_file_position;
+        checkpoint.save_to_rocksdb_cf();
 
         if task_err_occur.load(std::sync::atomic::Ordering::SeqCst) {
             return Err(anyhow!("compare task error"));

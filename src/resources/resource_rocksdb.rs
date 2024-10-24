@@ -2,12 +2,10 @@ use crate::commons::json_to_struct;
 use crate::commons::struct_to_json_string;
 use crate::configure::get_config;
 use crate::tasks::CheckPoint;
-use crate::tasks::CompareStatus;
 use crate::tasks::Status;
 use crate::tasks::Task;
 use crate::tasks::TaskStatus;
 use crate::tasks::TaskStopReason;
-use crate::tasks::TransferStatus;
 use anyhow::anyhow;
 use anyhow::Result;
 use once_cell::sync::Lazy;
@@ -65,12 +63,7 @@ pub fn change_taskstatus_to_stop() -> Result<()> {
         if let Ok(kv) = item {
             let mut task_status: TaskStatus = bincode::deserialize(&kv.1)?;
             if !task_status.is_stopped() {
-                task_status.status = match task_status.status {
-                    crate::tasks::Status::Transfer(_) => {
-                        Status::Transfer(TransferStatus::Stopped(TaskStopReason::Broken))
-                    }
-                    crate::tasks::Status::Compare(_) => Status::Compare(CompareStatus::Stopped),
-                }
+                task_status.status = Status::Stopped(TaskStopReason::Broken);
             }
             let _ = save_task_status_to_cf(&mut task_status)?;
         }

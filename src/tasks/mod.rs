@@ -5,6 +5,7 @@ mod modules;
 pub mod task;
 mod task_actions;
 mod task_assistant;
+pub mod task_delete;
 pub mod task_errors;
 mod task_status;
 mod task_status_saver;

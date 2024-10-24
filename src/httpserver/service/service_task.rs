@@ -24,7 +24,7 @@ pub fn service_remove_task(task_id: &str) -> Result<()> {
     };
     task.clean_runtime_status()
         .context(format!("{}:{}", file!(), line!()))?;
-    task.remove_meta_dir()
+    task.clean_persistenced_status()
         .context(format!("{}:{}", file!(), line!()))?;
     remove_task_from_cf(task_id)
 }

@@ -17,7 +17,7 @@ use crate::tasks::{
         transfer_local2local::TransferLocal2Local, transfer_local2oss::TransferLocal2Oss,
         transfer_oss2local::TransferOss2Local, transfer_oss2oss::TransferOss2Oss,
     },
-    FileDescription, IncrementAssistant, LogInfo, RecordOption, Status, TaskStatus, TransferStatus,
+    FileDescription, IncrementAssistant, LogInfo, RecordOption, Status, TaskStatus,
 };
 use anyhow::{anyhow, Context, Result};
 use dashmap::DashMap;
@@ -297,7 +297,7 @@ impl TransferTask {
         task.analyze_source().await
     }
 
-    pub async fn start_task(&self) -> Result<()> {
+    pub async fn start_transfer(&self) -> Result<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
         // sys_set 用于执行checkpoint、notify等辅助任务
         let mut sys_set = JoinSet::new();
@@ -316,7 +316,7 @@ impl TransferTask {
         let task_status = &mut TaskStatus {
             task_id: self.task_id.clone(),
             start_time: now.as_secs(),
-            status: Status::Transfer(TransferStatus::Starting),
+            status: Status::Starting,
         };
         let _ = save_task_status_to_cf(task_status)?;
 
@@ -439,8 +439,7 @@ impl TransferTask {
                         checkpoint.save_to_rocksdb_cf()?;
 
                         //变更任务状态为stock阶段
-                        task_status.status =
-                            Status::Transfer(TransferStatus::Running(TransferStage::Stock));
+                        task_status.status = Status::Running(TransferStage::Stock);
                         let _ = save_task_status_to_cf(task_status)?;
 
                         // 启动进度条线程
@@ -493,15 +492,14 @@ impl TransferTask {
 
         if self.attributes.transfer_type.is_stock() {
             //变更任务状态为 finish
-            task_status.status = Status::Transfer(TransferStatus::Stopped(TaskStopReason::Finish));
+            task_status.status = Status::Stopped(TaskStopReason::Finish);
             let _ =
                 save_task_status_to_cf(task_status).context(format!("{}:{}", file!(), line!()))?;
             checkpoint.save_to_rocksdb_cf()?;
             return Ok(());
         } else {
             //变更任务状态为 Increment
-            task_status.status =
-                Status::Transfer(TransferStatus::Running(TransferStage::Increment));
+            task_status.status = Status::Running(TransferStage::Increment);
             let _ =
                 save_task_status_to_cf(task_status).context(format!("{}:{}", file!(), line!()))?;
             checkpoint.task_stage = TransferStage::Increment;

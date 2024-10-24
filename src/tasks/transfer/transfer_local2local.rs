@@ -7,7 +7,6 @@ use crate::commons::{
 use crate::tasks::task::TaskDefaultParameters;
 use crate::tasks::task::{
     gen_file_path, MODIFIED_PREFIX, NOTIFY_FILE_PREFIX, OFFSET_PREFIX, REMOVED_PREFIX,
-    TRANSFER_ERROR_RECORD_PREFIX,
 };
 use crate::tasks::task_actions::TransferExecutor;
 use crate::tasks::{
@@ -540,19 +539,19 @@ impl TransferExecutor for TransferLocal2LocalExecutor {
         subffix.push_str("_");
         subffix.push_str(now.as_secs().to_string().as_str());
 
-        let error_file_name = gen_file_path(
-            &self.attributes.meta_dir,
-            TRANSFER_ERROR_RECORD_PREFIX,
-            &subffix,
-        );
+        // let error_file_name = gen_file_path(
+        //     &self.attributes.meta_dir,
+        //     TRANSFER_ERROR_RECORD_PREFIX,
+        //     &subffix,
+        // );
 
-        let error_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(error_file_name.as_str())?;
+        // let error_file = OpenOptions::new()
+        //     .create(true)
+        //     .write(true)
+        //     .truncate(true)
+        //     .open(error_file_name.as_str())?;
 
-        drop(error_file);
+        // drop(error_file);
 
         for record in records {
             if self.stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
@@ -566,23 +565,23 @@ impl TransferExecutor for TransferLocal2LocalExecutor {
             }
         }
 
-        let error_file = match File::open(&error_file_name) {
-            Ok(f) => f,
-            Err(e) => {
-                self.err_occur
-                    .store(true, std::sync::atomic::Ordering::SeqCst);
-                log::error!("{:?}", e);
-                return Err(anyhow!(e));
-            }
-        };
-        match error_file.metadata() {
-            Ok(meta) => {
-                if meta.len() == 0 {
-                    let _ = fs::remove_file(error_file_name.as_str());
-                }
-            }
-            Err(_) => {}
-        };
+        // let error_file = match File::open(&error_file_name) {
+        //     Ok(f) => f,
+        //     Err(e) => {
+        //         self.err_occur
+        //             .store(true, std::sync::atomic::Ordering::SeqCst);
+        //         log::error!("{:?}", e);
+        //         return Err(anyhow!(e));
+        //     }
+        // };
+        // match error_file.metadata() {
+        //     Ok(meta) => {
+        //         if meta.len() == 0 {
+        //             let _ = fs::remove_file(error_file_name.as_str());
+        //         }
+        //     }
+        //     Err(_) => {}
+        // };
 
         Ok(())
     }
