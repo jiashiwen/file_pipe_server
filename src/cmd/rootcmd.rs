@@ -10,18 +10,23 @@ use crate::tasks::{
     GLOBAL_TASK_STOP_MARK_MAP,
 };
 use clap::{Arg, ArgAction, ArgMatches};
+use daemonize::Daemonize;
 use fork::{daemon, Fork};
 use lazy_static::lazy_static;
 use signal_hook::consts::{SIGTERM, TERM_SIGNALS};
 use signal_hook::iterator::exfiltrator::WithOrigin;
 use signal_hook::iterator::SignalsInfo;
 use std::net::{self, IpAddr};
+use std::path::Path;
 use std::process::{exit, Command};
 use std::str::FromStr;
 use std::{env, fs, thread};
 use sysinfo::{Pid, RefreshKind, System};
 use tokio::net::TcpListener;
 use tokio::runtime::{self, Runtime};
+
+// pub const WORKING_DIRECTORY: &'static str = "./";
+pub const PID_FILE_NAME: &'static str = "pid";
 
 lazy_static! {
     static ref CLIAPP: clap::Command = clap::Command::new("serverframe-rs")
@@ -62,26 +67,39 @@ fn cmd_match(matches: &ArgMatches) {
     }
 
     if let Some(ref matches) = matches.subcommand_matches("start") {
-        if matches.get_flag("daemon") {
-            let args: Vec<String> = env::args().collect();
-            if let Ok(Fork::Child) = daemon(true, true) {
-                // Start child thread
-                let mut cmd = Command::new(&args[0]);
-                for idx in 1..args.len() {
-                    let arg = args.get(idx).expect("get cmd arg error!");
-                    // remove start as daemon variable
-                    // 去除后台启动参数,避免重复启动
-                    if arg.eq("-d") || arg.eq("-daemon") {
-                        continue;
-                    }
-                    cmd.arg(arg);
-                }
+        // if matches.get_flag("daemon") {
+        //     let args: Vec<String> = env::args().collect();
+        //     if let Ok(Fork::Child) = daemon(true, true) {
+        //         // Start child thread
+        //         let mut cmd = Command::new(&args[0]);
+        //         for idx in 1..args.len() {
+        //             let arg = args.get(idx).expect("get cmd arg error!");
+        //             // remove start as daemon variable
+        //             // 去除后台启动参数,避免重复启动
+        //             if arg.eq("-d") || arg.eq("-daemon") {
+        //                 continue;
+        //             }
+        //             cmd.arg(arg);
+        //         }
 
-                let child = cmd.spawn().expect("Child process failed to start.");
-                fs::write("pid", child.id().to_string()).expect("Write pid file error!");
+        //         let child = cmd.spawn().expect("Child process failed to start.");
+        //         fs::write("pid", child.id().to_string()).expect("Write pid file error!");
+        //     }
+        //     println!("{}", "daemon mod");
+        //     std::process::exit(0);
+        // }
+
+        if matches.get_flag("daemon") {
+            let daemonize = Daemonize::new()
+                .pid_file(PID_FILE_NAME) // Every method except `new` and `start`
+                .chown_pid_file(true) // is optional, see `Daemonize` documentation
+                .working_directory(env::current_dir().unwrap()) // for default behaviour.
+                .privileged_action(|| "Executed before drop privileges");
+
+            match daemonize.start() {
+                Ok(_) => println!("Success, daemonized"),
+                Err(e) => eprintln!("Error, {}", e),
             }
-            println!("{}", "daemon mod");
-            std::process::exit(0);
         }
 
         let banner = r" 
@@ -181,8 +199,14 @@ fn cmd_match(matches: &ArgMatches) {
         // let sys = System::new_with_specifics(RefreshKind::everything().without_disks_list());
         let sys =
             System::new_with_specifics(RefreshKind::everything().without_cpu().without_memory());
-        let pidstr = String::from_utf8(fs::read("pid").unwrap()).unwrap();
-        let pid = Pid::from_str(pidstr.as_str()).unwrap();
+
+        let mut pid_path = env::current_dir().unwrap();
+        pid_path.push(PID_FILE_NAME);
+
+        println!("{:?}", pid_path);
+        let pidstr = String::from_utf8(fs::read(pid_path).unwrap()).unwrap();
+
+        let pid = Pid::from_str(pidstr.trim()).unwrap();
 
         if let Some(p) = sys.process(pid) {
             println!("terminal process: {:?}", p.pid());
@@ -190,8 +214,9 @@ fn cmd_match(matches: &ArgMatches) {
             println!("Server not run!");
             return;
         };
+
         Command::new("kill")
-            .args(["-15", pidstr.as_str()])
+            .args(["-15", pidstr.trim()])
             .output()
             .expect("failed to execute process");
     }
