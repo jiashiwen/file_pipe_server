@@ -1,47 +1,36 @@
-use crate::commons::quantify_processbar;
-use crate::commons::{json_to_struct, LastModifyFilter};
+use crate::commons::{json_to_struct, quantify_processbar, LastModifyFilter};
 use crate::resources::get_checkpoint;
 use crate::resources::save_task_status_to_cf;
 use crate::s3::OSSDescription;
-use crate::tasks::modules::{CheckPoint, FilePosition, ListedRecord};
-use crate::tasks::task::TaskStopReason;
-use crate::tasks::task::NOTIFY_FILE_PREFIX;
-use crate::tasks::task::{
-    de_usize_from_str, gen_file_path, se_usize_to_str, TaskDefaultParameters, TransferStage,
-    OFFSET_PREFIX, TRANSFER_OBJECT_LIST_FILE_PREFIX,
-};
+use crate::tasks::task::{de_usize_from_str, gen_file_path, se_usize_to_str};
 use crate::tasks::task_status_saver::{
     GLOBAL_TASK_LIST_FILE_POSITON_MAP, GLOBAL_TASK_STOP_MARK_MAP,
 };
-use crate::tasks::transfer::transfer_local2local::TransferLocal2Local;
-use crate::tasks::transfer::transfer_local2oss::TransferLocal2Oss;
-use crate::tasks::transfer::transfer_oss2local::TransferOss2Local;
-use crate::tasks::transfer::transfer_oss2oss::TransferOss2Oss;
-use crate::tasks::FileDescription;
-use crate::tasks::LogInfo;
-use crate::tasks::RecordOption;
-use crate::tasks::Status;
-use crate::tasks::TaskStatus;
-use crate::tasks::TransferStatus;
-
-use crate::tasks::{task_actions::TransferTaskActions, IncrementAssistant};
-use anyhow::anyhow;
-use anyhow::Context;
-use anyhow::Result;
+use crate::tasks::{
+    modules::{CheckPoint, FilePosition, ListedRecord},
+    task::{
+        TaskDefaultParameters, TaskStopReason, TransferStage, NOTIFY_FILE_PREFIX, OFFSET_PREFIX,
+        TRANSFER_OBJECT_LIST_FILE_PREFIX,
+    },
+    task_actions::TransferTaskActions,
+    transfer::{
+        transfer_local2local::TransferLocal2Local, transfer_local2oss::TransferLocal2Oss,
+        transfer_oss2local::TransferOss2Local, transfer_oss2oss::TransferOss2Oss,
+    },
+    FileDescription, IncrementAssistant, LogInfo, RecordOption, Status, TaskStatus, TransferStatus,
+};
+use anyhow::{anyhow, Context, Result};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fs::OpenOptions;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 use std::{
-    fs::{self, File},
+    collections::BTreeMap,
+    fs::{self, File, OpenOptions},
     io::{self, BufRead},
     sync::{atomic::AtomicBool, Arc},
+    time::{SystemTime, UNIX_EPOCH},
 };
-use tokio::sync::Semaphore;
 use tokio::{
-    sync::Mutex,
+    sync::{Mutex, Semaphore},
     task::{self, JoinSet},
 };
 use walkdir::WalkDir;
@@ -606,11 +595,6 @@ impl TransferTask {
             true => {
                 let checkpoint =
                     get_checkpoint(&self.task_id).context(format!("{}:{}", file!(), line!()))?;
-
-                // 执行error retry
-                // task.error_record_retry(stop_mark.clone(), semaphore.clone())
-                //     .await
-                //     .context(format!("{}:{}", file!(), line!()))?;
 
                 // 清理notify file
                 for entry in WalkDir::new(&self.attributes.meta_dir)

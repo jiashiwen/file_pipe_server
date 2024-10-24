@@ -1,8 +1,8 @@
 use super::task_transfer::TransferTaskAttributes;
 use crate::commons::{
-    analyze_folder_files_size, copy_file, json_to_struct, merge_file, read_lines,
-    scan_folder_files_to_file, struct_to_json_string, LastModifyFilter, Modified, ModifyType,
-    NotifyWatcher, PathType, RegexFilter,
+    analyze_folder_files_size, copy_file, merge_file, scan_folder_files_to_file,
+    struct_to_json_string, LastModifyFilter, Modified, ModifyType, NotifyWatcher, PathType,
+    RegexFilter,
 };
 use crate::tasks::task::TaskDefaultParameters;
 use crate::tasks::task::{
@@ -57,66 +57,6 @@ impl TransferTaskActions for TransferLocal2Local {
             self.attributes.last_modify_filter,
         )
     }
-
-    // async fn error_record_retry(
-    //     &self,
-    //     stop_mark: Arc<AtomicBool>,
-    //     semaphore: Arc<Semaphore>,
-    //     // executing_transfers: Arc<RwLock<usize>>,
-    // ) -> Result<()> {
-    //     // 遍历meta dir 执行所有err开头文件
-    //     for entry in WalkDir::new(self.attributes.meta_dir.as_str())
-    //         .into_iter()
-    //         .filter_map(Result::ok)
-    //         .filter(|e| !e.file_type().is_dir() && e.file_name().to_str().is_some())
-    //     {
-    //         let file_name = match entry.file_name().to_str() {
-    //             Some(name) => name,
-    //             None => {
-    //                 continue;
-    //             }
-    //         };
-
-    //         if !file_name.starts_with(TRANSFER_ERROR_RECORD_PREFIX) {
-    //             continue;
-    //         };
-
-    //         if let Some(p) = entry.path().to_str() {
-    //             if let Ok(lines) = read_lines(p) {
-    //                 let mut record_vec = vec![];
-    //                 for line in lines {
-    //                     match line {
-    //                         Ok(content) => {
-    //                             let record = json_to_struct::<RecordOption>(content.as_str())?;
-    //                             record_vec.push(record);
-    //                         }
-    //                         Err(e) => {
-    //                             log::error!("{:?}", e);
-    //                             return Err(anyhow!("{}", e));
-    //                         }
-    //                     }
-    //                 }
-
-    //                 if record_vec.len() > 0 {
-    //                     let local2local = TransferLocal2LocalExecutor {
-    //                         task_id: self.task_id.clone(),
-    //                         source: self.source.clone(),
-    //                         target: self.target.clone(),
-    //                         stop_mark: stop_mark.clone(),
-    //                         err_occur: Arc::new(AtomicBool::new(false)),
-    //                         offset_map: Arc::new(DashMap::<String, FilePosition>::new()),
-    //                         attributes: self.attributes.clone(),
-    //                         list_file_path: p.to_string(),
-    //                     };
-    //                     let _ = local2local.transfer_record_options(record_vec);
-    //                 }
-    //             }
-    //             let _ = fs::remove_file(p);
-    //         }
-    //     }
-
-    //     Ok(())
-    // }
 
     fn gen_transfer_executor(
         &self,
@@ -249,12 +189,6 @@ impl TransferTaskActions for TransferLocal2Local {
 
                 let target_key_str = gen_file_path(&self.target, key, "");
 
-                // let modified_time = entry
-                //     .metadata()?
-                //     .modified()?
-                //     .duration_since(UNIX_EPOCH)?
-                //     .as_secs();
-
                 let modified_time = TryFrom::try_from(
                     entry
                         .metadata()?
@@ -357,11 +291,6 @@ impl TransferTaskActions for TransferLocal2Local {
         };
         drop(lock);
 
-        let executed_file = FileDescription {
-            path: local_notify.notify_file_path.clone(),
-            size: 0,
-            total_lines: 0,
-        };
         let file_position = FilePosition::default();
 
         let mut offset = match TryInto::<u64>::try_into(file_position.offset) {
@@ -377,12 +306,6 @@ impl TransferTaskActions for TransferLocal2Local {
         let mut offset_key = OFFSET_PREFIX.to_string();
         offset_key.push_str(&subffix);
 
-        // let error_file_name = gen_file_path(
-        //     &self.attributes.meta_dir,
-        //     TRANSFER_ERROR_RECORD_PREFIX,
-        //     &subffix,
-        // );
-
         let regex_filter =
             match RegexFilter::from_vec(&self.attributes.exclude, &self.attributes.include) {
                 Ok(r) => r,
@@ -391,20 +314,6 @@ impl TransferTaskActions for TransferLocal2Local {
                     return;
                 }
             };
-        // let error_file = match OpenOptions::new()
-        //     .create(true)
-        //     .write(true)
-        //     .truncate(true)
-        //     .open(error_file_name.as_str())
-        // {
-        //     Ok(f) => f,
-        //     Err(e) => {
-        //         log::error!("{:?}", e);
-        //         return;
-        //     }
-        // };
-
-        // drop(error_file);
 
         loop {
             if local_notify
@@ -465,7 +374,7 @@ impl TransferTaskActions for TransferLocal2Local {
                                 },
                                 option: Opt::UNKOWN,
                             };
-                            // r.handle_error(stop_mark.clone(), err_occur.clone(), &error_file_name);
+
                             r.handle_error(stop_mark.clone(), err_occur.clone());
                             log::error!("{:?}", e);
                         }
@@ -487,23 +396,6 @@ impl TransferTaskActions for TransferLocal2Local {
                 let _ = copy.transfer_record_options(records).await;
             }
 
-            // let error_file = match File::open(&error_file_name) {
-            //     Ok(f) => f,
-            //     Err(e) => {
-            //         log::error!("{:?}", e);
-            //         err_occur.store(true, std::sync::atomic::Ordering::SeqCst);
-            //         return;
-            //     }
-            // };
-
-            // match error_file.metadata() {
-            //     Ok(meta) => {
-            //         if meta.len() == 0 {
-            //             let _ = fs::remove_file(error_file_name.as_str());
-            //         }
-            //     }
-            //     Err(_) => {}
-            // };
             offset = local_notify.notify_file_size.load(Ordering::SeqCst);
             let offset_usize = TryInto::<usize>::try_into(offset).unwrap();
             let position = FilePosition {
@@ -594,30 +486,6 @@ impl TransferExecutor for TransferLocal2LocalExecutor {
         let mut offset_key = OFFSET_PREFIX.to_string();
         offset_key.push_str(&subffix);
 
-        // let error_file_name = gen_file_path(
-        //     &self.attributes.meta_dir,
-        //     TRANSFER_ERROR_RECORD_PREFIX,
-        //     &subffix,
-        // );
-
-        // let error_file = match OpenOptions::new()
-        //     .create(true)
-        //     .write(true)
-        //     .truncate(true)
-        //     .open(error_file_name.as_str())
-        // {
-        //     Ok(f) => f,
-        //     Err(e) => {
-        //         self.err_occur
-        //             .store(true, std::sync::atomic::Ordering::SeqCst);
-        //         self.stop_mark
-        //             .store(true, std::sync::atomic::Ordering::SeqCst);
-        //         return Err(anyhow!("{}", e));
-        //     }
-        // };
-
-        // drop(error_file);
-
         for record in records {
             if self.stop_mark.load(std::sync::atomic::Ordering::SeqCst) {
                 return Ok(());
@@ -659,25 +527,6 @@ impl TransferExecutor for TransferLocal2LocalExecutor {
         }
 
         self.offset_map.remove(&offset_key);
-
-        // let error_file = match File::open(&error_file_name) {
-        //     Ok(f) => f,
-        //     Err(e) => {
-        //         self.err_occur
-        //             .store(true, std::sync::atomic::Ordering::SeqCst);
-        //         log::error!("{:?}", e);
-        //         return Err(anyhow!(e));
-        //     }
-        // };
-
-        // match error_file.metadata() {
-        //     Ok(meta) => {
-        //         if meta.len() == 0 {
-        //             let _ = fs::remove_file(error_file_name.as_str());
-        //         }
-        //     }
-        //     Err(_) => {}
-        // };
 
         Ok(())
     }
